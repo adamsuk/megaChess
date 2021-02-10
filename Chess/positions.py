@@ -1,3 +1,7 @@
+"""
+Positions - a module used to determine the potential and legal positions a single piece can move
+"""
+
 class PosiblePositions:
     def __init__(self,
                  init_pos,

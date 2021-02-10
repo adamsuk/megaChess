@@ -12,8 +12,8 @@ class Piece:
 
 
 class AllPieces:
-    def __init__(self, 
-                 pieces_def_loc=None, 
+    def __init__(self,
+                 pieces_def_loc=None,
                  pieces_def_filename="pieces_defs.json"):
         if not pieces_def_loc:
             script_loc = os.path.dirname(os.path.abspath(__file__))
@@ -21,9 +21,10 @@ class AllPieces:
         self.pieces_def_loc = os.path.join(pieces_def_loc, pieces_def_filename)
         # load up the definitions
         self._load_pieces_defs()
-    
+
     def _load_pieces_defs(self):
-        self.pieces_defs = json.load(self.pieces_def_loc)
+        with open(self.pieces_def_loc) as f:
+            self.pieces_defs = json.load(f)
 
 if __name__ == "__main__":
     allPieces = AllPieces()

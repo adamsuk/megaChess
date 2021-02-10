@@ -18,13 +18,13 @@ class PosiblePositions:
         self._determine_delta_pos()
         self.pos_positions()
         self.legal_positions()
-    
+
     def _determine_delta_pos(self):
         """
         Method for working out delta in positions
         """
         pass
-    
+
     def pos_positions(self):
         """
         Method to work out the possible positions based on current and peice deltas.
@@ -33,13 +33,12 @@ class PosiblePositions:
             x_delta = delta[0]
             y_delta = delta[1]
             self.pos_pos.append([self.current_x + x_delta, self.current_y + y_delta])
-            
+
     def legal_positions(self):
         """
-        Determine if possible positions are legal        
+        Determine if possible positions are legal
         """
         if not self.pos_pos:
-        
             self.pos_positions()
         for pos_x, pos_y in self.pos_pos:
             # is possible position in the other_peices list
@@ -47,7 +46,7 @@ class PosiblePositions:
                 # is it in board boundary?
                 if self._position_inside_board(pos_x, pos_y, self.board_size[0], self.board_size[1]):
                     self.legal_pos.append([pos_x, pos_y])
-            
+
     @staticmethod
     def _position_inside_board(x, y, board_size_x, board_size_y):
         legal_pos = True
@@ -57,8 +56,14 @@ class PosiblePositions:
         return legal_pos
 
 if __name__ == "__main__":
+    # [x,y]
+    init_pos = [4,3]
+    deltas = [[2,1],[1,2],[-1,2],[-2,1],[-1,-2],[-2,-1],[1,-2],[2,-1]]
+    board_size = [7,7]
+    other_peices = []
+
     PosPos = PosiblePositions(init_pos=init_pos,
                               deltas=deltas,
                               board_size=board_size,
-                              other_peices=[[6,4],])
-    PosPos.legal_pos
+                              other_peices=other_peices)
+    print(PosPos.legal_pos)

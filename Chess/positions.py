@@ -27,7 +27,8 @@ class PosiblePositions:
         """
         Method for working out delta in positions
         """
-        pass
+        if not all([isinstance(delta, (list, tuple)) for delta in self.deltas]):
+            print(self.deltas)
 
     def pos_positions(self):
         """

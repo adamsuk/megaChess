@@ -1,23 +1,23 @@
 {
   "knight": {
-    "moves": [[2,1],[1,2],[-1,2],[-2,1],[-1,-2],[-2,-1],[1,-2],[2,-1]]
+    "deltas": [[2,1],[1,2],[-1,2],[-2,1],[-1,-2],[-2,-1],[1,-2],[2,-1]]
   },
   "pawn": {
-    "moves": [[0,1]],
+    "deltas": [[0,1]],
     "first_move": {
-      "moves": [[0,1],[0,2]]
+      "deltas": [[0,1],[0,2]]
     }
   },
   "king": {
-    "moves": [[0,1],[1,0],[0,-1],[-1,0],[1,1],[1,-1],[-1,-1],[1,-1]]
+    "deltas": [[0,1],[1,0],[0,-1],[-1,0],[1,1],[1,-1],[-1,-1],[1,-1]]
   },
   "bishop": {
-    "moves": ["diagonal"]
+    "deltas": ["diagonal"]
   },
   "castle": {
-    "moves": ["straight"]
+    "deltas": ["straight"]
   },
   "queen": {
-    "moves": ["diagonal","straight"]
+    "deltas": ["diagonal","straight"]
   }
 }

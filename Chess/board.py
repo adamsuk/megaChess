@@ -39,6 +39,13 @@ Everest Witman - May 2014 - Marlboro College - Programming Workshop
 import pygame, sys
 from pygame.locals import *
 
+try:
+    # Python 2
+    xrange
+except NameError:
+    # Python 3, xrange is now named range
+    xrange = range
+
 pygame.font.init()
 
 ##COLORS##
@@ -211,7 +218,7 @@ class Graphics:
 		"""
 		for x in xrange(8):
 			for y in xrange(8):
-				pygame.draw.rect(self.screen, board[x][y].color, (x * self.square_size, y * self.square_size, self.square_size, self.square_size), )
+				pygame.draw.rect(self.screen, board[int(x)][int(y)].color, (x * self.square_size, y * self.square_size, self.square_size, self.square_size), )
 	
 	def draw_board_pieces(self, board):
 		"""
@@ -219,8 +226,9 @@ class Graphics:
 		"""
 		for x in xrange(8):
 			for y in xrange(8):
-				if board.matrix[x][y].occupant != None:
-					pygame.draw.circle(self.screen, board.matrix[x][y].occupant.color, self.pixel_coords((x,y)), self.piece_size) 
+				if board.matrix[int(x)][int(y)].occupant != None:
+					print(self.screen, board.matrix[int(x)][int(y)].occupant.color, self.pixel_coords((x,y)), self.piece_size)
+					pygame.draw.circle(self.screen, board.matrix[int(x)][int(y)].occupant.color, self.pixel_coords((x,y)), self.piece_size) 
 
 					if board.location((x,y)).occupant.king == True:
 						pygame.draw.circle(self.screen, GOLD, self.pixel_coords((x,y)), int (self.piece_size / 1.7), self.piece_size / 4)
@@ -279,23 +287,23 @@ class Board:
 		for x in xrange(8):
 			for y in xrange(8):
 				if (x % 2 != 0) and (y % 2 == 0):
-					matrix[y][x] = Square(WHITE)
+					matrix[int(y)][int(x)] = Square(WHITE)
 				elif (x % 2 != 0) and (y % 2 != 0):
-					matrix[y][x] = Square(BLACK)
+					matrix[int(y)][int(x)] = Square(BLACK)
 				elif (x % 2 == 0) and (y % 2 != 0):
-					matrix[y][x] = Square(WHITE)
+					matrix[int(y)][int(x)] = Square(WHITE)
 				elif (x % 2 == 0) and (y % 2 == 0): 
-					matrix[y][x] = Square(BLACK)
+					matrix[int(y)][int(x)] = Square(BLACK)
 
 		# initialize the pieces and put them in the appropriate squares
 
 		for x in xrange(8):
 			for y in xrange(3):
-				if matrix[x][y].color == BLACK:
-					matrix[x][y].occupant = Piece(RED)
+				if matrix[int(x)][int(y)].color == BLACK:
+					matrix[int(x)][int(y)].occupant = Piece(RED)
 			for y in xrange(5, 8):
-				if matrix[x][y].color == BLACK:
-					matrix[x][y].occupant = Piece(BLUE)
+				if matrix[int(x)][int(y)].color == BLACK:
+					matrix[int(x)][int(y)].occupant = Piece(BLUE)
 
 		return matrix
 
@@ -308,10 +316,10 @@ class Board:
 
 		for x in xrange(8):
 			for y in xrange(8):
-				if board[x][y].color == WHITE:
-					board_string[x][y] = "WHITE"
+				if board[int(x)][int(y)].color == WHITE:
+					board_string[int(x)][int(y)] = "WHITE"
 				else:
-					board_string[x][y] = "BLACK"
+					board_string[int(x)][int(y)] = "BLACK"
 
 
 		return board_string
@@ -357,11 +365,11 @@ class Board:
 
 	def location(self, coord_tuple):
 		"""
-		Takes a set of coordinates as arguments and returns self.matrix[x][y]
+		Takes a set of coordinates as arguments and returns self.matrix[int(x)][int(y)]
 		This can be faster than writing something like self.matrix[coords[0]][coords[1]]
 		"""
 		x, y = coord_tuple
-		return self.matrix[x][y]
+		return self.matrix[int(x)][int(y)]
 
 	def blind_legal_moves(self, coord_tuple):
 		"""
@@ -369,12 +377,12 @@ class Board:
 		If that location is empty, then blind_legal_moves() return an empty list.
 		"""
 		x, y = coord_tuple
-		if self.matrix[x][y].occupant != None:
+		if self.matrix[int(x)][int(y)].occupant != None:
 			
-			if self.matrix[x][y].occupant.king == False and self.matrix[x][y].occupant.color == BLUE:
+			if self.matrix[int(x)][int(y)].occupant.king == False and self.matrix[int(x)][int(y)].occupant.color == BLUE:
 				blind_legal_moves = [self.rel(NORTHWEST, (x,y)), self.rel(NORTHEAST, (x,y))]
 				
-			elif self.matrix[x][y].occupant.king == False and self.matrix[x][y].occupant.color == RED:
+			elif self.matrix[int(x)][int(y)].occupant.king == False and self.matrix[int(x)][int(y)].occupant.color == RED:
 				blind_legal_moves = [self.rel(SOUTHWEST, (x,y)), self.rel(SOUTHEAST, (x,y))]
 
 			else:
@@ -417,7 +425,7 @@ class Board:
 		Removes a piece from the board at position (x,y). 
 		"""
 		x, y = coord_tuple
-		self.matrix[x][y].occupant = None
+		self.matrix[int(x)][int(y)].occupant = None
 
 	def move_piece(self, start_coord_tuple, end_coord_tuple):
 		"""

@@ -15,7 +15,21 @@ pygame.font.init()
 
 class Board:
 	def __init__(self):
-		self.matrix = self.new_board()
+		self.new_board()
+
+	def draw_board_squares(self):
+		# The following code block has been adapted from
+		# http://itgirl.dreamhosters.com/itgirlgames/games/Program%20Leaders/ClareR/Checkers/checkers.py
+		for x in xrange(8):
+			for y in xrange(8):
+				if (x % 2 != 0) and (y % 2 == 0):
+					self.matrix[int(y)][int(x)] = Square(Colours.WHITE, (x,y))
+				elif (x % 2 != 0) and (y % 2 != 0):
+					self.matrix[int(y)][int(x)] = Square(Colours.BLACK, (x,y))
+				elif (x % 2 == 0) and (y % 2 != 0):
+					self.matrix[int(y)][int(x)] = Square(Colours.WHITE, (x,y))
+				elif (x % 2 == 0) and (y % 2 == 0): 
+					self.matrix[int(y)][int(x)] = Square(Colours.BLACK, (x,y))
 
 	def new_board(self):
 		"""
@@ -24,50 +38,22 @@ class Board:
 
 		# initialize squares and place them in matrix
 
-		matrix = [[None] * 8 for i in xrange(8)]
+		self.matrix = [[None] * 8 for i in xrange(8)]
 
-		# The following code block has been adapted from
-		# http://itgirl.dreamhosters.com/itgirlgames/games/Program%20Leaders/ClareR/Checkers/checkers.py
-		for x in xrange(8):
-			for y in xrange(8):
-				if (x % 2 != 0) and (y % 2 == 0):
-					matrix[int(y)][int(x)] = Square(Colours.WHITE)
-				elif (x % 2 != 0) and (y % 2 != 0):
-					matrix[int(y)][int(x)] = Square(Colours.BLACK)
-				elif (x % 2 == 0) and (y % 2 != 0):
-					matrix[int(y)][int(x)] = Square(Colours.WHITE)
-				elif (x % 2 == 0) and (y % 2 == 0): 
-					matrix[int(y)][int(x)] = Square(Colours.BLACK)
+		# initialize the board squares
+		self.draw_board_squares()
 
 		# initialize the pieces and put them in the appropriate squares
 
 		for x in xrange(8):
 			for y in xrange(3):
-				if matrix[int(x)][int(y)].color == Colours.BLACK:
-					matrix[int(x)][int(y)].occupant = Piece(Colours.RED)
+				if self.matrix[int(x)][int(y)].color == Colours.BLACK:
+					self.matrix[int(x)][int(y)].occupant = Piece(Colours.RED)
 			for y in xrange(5, 8):
-				if matrix[int(x)][int(y)].color == Colours.BLACK:
-					matrix[int(x)][int(y)].occupant = Piece(Colours.BLUE)
-
-		return matrix
-
-	def board_string(self, board):
-		"""
-		Takes a board and returns a matrix of the board space colors. Used for testing new_board()
-		"""
-
-		board_string = [[None] * 8] * 8 
-
-		for x in xrange(8):
-			for y in xrange(8):
-				if board[int(x)][int(y)].color == Colours.WHITE:
-					board_string[int(x)][int(y)] = "WHITE"
-				else:
-					board_string[int(x)][int(y)] = "BLACK"
+				if self.matrix[int(x)][int(y)].color == Colours.BLACK:
+					self.matrix[int(x)][int(y)].occupant = Piece(Colours.BLUE)
 
 
-		return board_string
-	
 	def rel(self, dir, coord_tuple):
 		"""
 		Returns the coordinates one square in a different direction to (x,y).
@@ -166,6 +152,9 @@ class Board:
 
 		return legal_moves
 
+	def nearest_square(self, mouse_pos):
+		return self.matrix[int(mouse_pos[1])][int(mouse_pos[0])].coords
+
 	def remove_piece(self, coord_tuple):
 		"""
 		Removes a piece from the board at position (x,y). 
@@ -243,11 +232,12 @@ class Board:
 				self.location((x,y)).occupant.king = True 
 
 class Piece:
-	def __init__(self, color, king = False):
+	def __init__(self, color, king=False):
 		self.color = color
 		self.king = king
 
 class Square:
-	def __init__(self, color, occupant = None):
+	def __init__(self, color, coords, occupant=None):
 		self.color = color # color is either BLACK or WHITE
 		self.occupant = occupant # occupant is a Square object
+		self.coords = coords

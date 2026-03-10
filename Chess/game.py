@@ -69,8 +69,8 @@ class Game:
 
                         if self.mouse_pos not in self.board.adjacent(self.selected_piece):
                             self.board.remove_piece((self.selected_piece[0] + (
-                                        self.mouse_pos[0] - self.selected_piece[0]) / 2, self.selected_piece[1] + (
-                                                                 self.mouse_pos[1] - self.selected_piece[1]) / 2))
+                                        self.mouse_pos[0] - self.selected_piece[0]) // 2, self.selected_piece[1] + (
+                                                                 self.mouse_pos[1] - self.selected_piece[1]) // 2))
 
                             self.hop = True
                             self.selected_piece = selected_square
@@ -83,8 +83,8 @@ class Game:
                                                                                                 self.hop):
                         self.board.move_piece(self.selected_piece, selected_square)
                         self.board.remove_piece((self.selected_piece[0] + (
-                                    self.mouse_pos[0] - self.selected_piece[0]) / 2, self.selected_piece[1] + (
-                                                             self.mouse_pos[1] - self.selected_piece[1]) / 2))
+                                    self.mouse_pos[0] - self.selected_piece[0]) // 2, self.selected_piece[1] + (
+                                                             self.mouse_pos[1] - self.selected_piece[1]) // 2))
 
                     if self.board.legal_moves(self.mouse_pos, self.hop) == []:
                         self.end_turn()
@@ -154,12 +154,14 @@ class Graphics:
         self.fps = 60
         self.clock = pygame.time.Clock()
 
-        self.window_size = 600
+        pygame.init()
+        info = pygame.display.Info()
+        self.window_size = min(info.current_w, info.current_h)
         self.screen = pygame.display.set_mode((self.window_size, self.window_size))
         # self.background = pygame.image.load('resources/board.png')
         
-        self.square_size = self.window_size / 8
-        self.piece_size = self.square_size / 2
+        self.square_size = self.window_size // 8
+        self.piece_size = self.square_size // 2
 
         self.message = False
 
@@ -176,13 +178,11 @@ class Graphics:
         """
         This updates the current display.
         """
-        # self.screen.blit(self.background, (0,0))
-        print('click: {}'.format(click))
-        print('self.highlights: {}'.format(self.highlights))
+        self.draw_board_squares(board)
         if click:
             self.highlight_squares(legal_moves, self.pixel_coords(mouse_pos))
-        #elif not click and self.highlights:
-        #    self.del_highlight_squares(board)
+        elif not click and self.highlights:
+            self.highlights = False
 
         self.draw_board_pieces(board)
 
@@ -198,7 +198,7 @@ class Graphics:
         """
         for x in xrange(8):
             for y in xrange(8):
-                pygame.draw.rect(self.screen, board[int(x)][int(y)].color,
+                pygame.draw.rect(self.screen, board.matrix[int(x)][int(y)].color,
                                  (x * self.square_size, y * self.square_size, self.square_size, self.square_size), )
 
     def draw_board_pieces(self, board):
@@ -214,8 +214,8 @@ class Graphics:
                                        self.pixel_coords((x, y)), self.piece_size)
 
                     if board.location((x, y)).occupant.king == True:
-                        pygame.draw.circle(self.screen, GOLD, self.pixel_coords((x, y)), int(self.piece_size / 1.7),
-                                           self.piece_size / 4)
+                        pygame.draw.circle(self.screen, Colours.GOLD, self.pixel_coords((x, y)), int(self.piece_size / 1.7),
+                                           self.piece_size // 4)
 
     def pixel_coords(self, board_coords):
         """
@@ -229,8 +229,9 @@ class Graphics:
         Does the reverse of pixel_coords(). Takes in a tuple of of pixel coordinates and returns what square they are in.
         """
         pixel_x, pixel_y = pixel_coords_tuple
-        #print(pixel_x / self.square_size, pixel_y / self.square_size)
-        return (pixel_x / self.square_size, pixel_y / self.square_size)
+        x = min(max(pixel_x // self.square_size, 0), 7)
+        y = min(max(pixel_y // self.square_size, 0), 7)
+        return (x, y)
 
     def highlight_squares(self, squares, origin):
         """
@@ -251,8 +252,7 @@ class Graphics:
         self.highlights = True
 
     def del_highlight_squares(self, board):
-        # redraw board squares
-        board.draw_board_squares()
+        self.draw_board_squares(board)
         self.highlights = False
 
     def draw_message(self, message):

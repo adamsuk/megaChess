@@ -24,7 +24,7 @@ class Game:
         self.graphics = Graphics()
         self.board = Board()
 
-        self.turn = Colours.BLUE
+        self.turn = Colours.WHITE
         self.selected_piece = None  # a board location.
         self.hop = False
         self.selected_legal_moves = []
@@ -118,20 +118,20 @@ class Game:
         End the turn. Switches the current player.
         end_turn() also checks for and game and resets a lot of class attributes.
         """
-        if self.turn == Colours.BLUE:
-            self.turn = Colours.RED
+        if self.turn == Colours.WHITE:
+            self.turn = Colours.PIECE_BLACK
         else:
-            self.turn = Colours.BLUE
+            self.turn = Colours.WHITE
 
         self.selected_piece = None
         self.selected_legal_moves = []
         self.hop = False
 
         if self.check_for_endgame():
-            if self.turn == Colours.BLUE:
-                self.graphics.draw_message("RED WINS!")
+            if self.turn == Colours.WHITE:
+                self.graphics.draw_message("BLACK WINS!")
             else:
-                self.graphics.draw_message("BLUE WINS!")
+                self.graphics.draw_message("WHITE WINS!")
 
     def check_for_endgame(self):
         """
@@ -139,8 +139,7 @@ class Game:
         """
         for x in xrange(8):
             for y in xrange(8):
-                if self.board.location((x, y)).color == Colours.BLACK and self.board.location(
-                        (x, y)).occupant != None and self.board.location((x, y)).occupant.color == self.turn:
+                if self.board.location((x, y)).occupant != None and self.board.location((x, y)).occupant.color == self.turn:
                     if self.board.legal_moves((x, y)) != []:
                         return False
 

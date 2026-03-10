@@ -98,15 +98,10 @@ class Board:
 		"""
 		x, y = coord_tuple
 		if self.matrix[int(x)][int(y)].occupant != None:
-			
-			if self.matrix[int(x)][int(y)].occupant.king == False and self.matrix[int(x)][int(y)].occupant.color == Colours.BLUE:
+			if self.matrix[int(x)][int(y)].occupant.color == Colours.WHITE:
 				blind_legal_moves = [self.rel(Directions.NORTHWEST, (x,y)), self.rel(Directions.NORTHEAST, (x,y))]
-				
-			elif self.matrix[int(x)][int(y)].occupant.king == False and self.matrix[int(x)][int(y)].occupant.color == Colours.RED:
-				blind_legal_moves = [self.rel(Directions.SOUTHWEST, (x,y)), self.rel(Directions.SOUTHEAST, (x,y))]
-
 			else:
-				blind_legal_moves = [self.rel(Directions.NORTHWEST, (x,y)), self.rel(Directions.NORTHEAST, (x,y)), self.rel(Directions.SOUTHWEST, (x,y)), self.rel(Directions.SOUTHEAST, (x,y))]
+				blind_legal_moves = [self.rel(Directions.SOUTHWEST, (x,y)), self.rel(Directions.SOUTHEAST, (x,y))]
 
 		else:
 			blind_legal_moves = []
@@ -217,9 +212,7 @@ class Board:
 		If it meets the criteria, then king() kings the piece in that square and kings it.
 		"""
 		x, y = coord_tuple
-		if self.location((x,y)).occupant != None:
-			if (self.location((x,y)).occupant.color == Colours.BLUE and y == 0) or (self.location((x,y)).occupant.color == Colours.RED and y == 7):
-				self.location((x,y)).occupant.king = True 
+		pass
 
 class Piece:
 	def __init__(self, color, piece_type, king=False):

@@ -154,8 +154,9 @@ class Graphics:
         self.fps = 60
         self.clock = pygame.time.Clock()
 
-        self.window_size = 600
         pygame.init()
+        info = pygame.display.Info()
+        self.window_size = min(info.current_w, info.current_h)
         self.screen = pygame.display.set_mode((self.window_size, self.window_size))
         # self.background = pygame.image.load('resources/board.png')
         

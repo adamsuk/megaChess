@@ -4,7 +4,7 @@ from pygame import locals
 
 from common import Colours, Directions
 from pieces import AllPieces
-from positions import ChessMoves
+from positions import PieceMoves
 
 try:
     # Python 2
@@ -103,7 +103,7 @@ class Board:
 		piece = self.matrix[int(x)][int(y)].occupant
 		if piece is None:
 			return []
-		return ChessMoves(
+		return PieceMoves(
 			pos=(x, y),
 			piece_type=piece.piece_type,
 			piece_color=piece.color,

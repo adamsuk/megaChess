@@ -189,6 +189,71 @@ class Board:
 		x, y = coord_tuple
 		pass
 
+	# ------------------------------------------------------------------
+	# Check / checkmate helpers
+	# ------------------------------------------------------------------
+
+	def find_king(self, color):
+		"""Returns (x, y) of the king belonging to `color`, or None."""
+		for x in xrange(8):
+			for y in xrange(8):
+				piece = self.matrix[x][y].occupant
+				if piece and piece.color == color and piece.piece_type == 'king':
+					return (x, y)
+		return None
+
+	def is_in_check(self, color):
+		"""Returns True if the king of `color` is currently under attack."""
+		king_pos = self.find_king(color)
+		if king_pos is None:
+			return False
+		for x in xrange(8):
+			for y in xrange(8):
+				piece = self.matrix[x][y].occupant
+				if piece and piece.color != color:
+					if king_pos in PieceMoves(
+						pos=(x, y),
+						piece_type=piece.piece_type,
+						piece_color=piece.color,
+						board_matrix=self.matrix,
+						piece_defs=self.pieces_defs,
+						white_color=Colours.WHITE
+					).legal:
+						return True
+		return False
+
+	def _simulate_move(self, start, end):
+		"""Temporarily applies a move. Returns the piece that was on `end` (may be None)."""
+		sx, sy = start
+		ex, ey = end
+		captured = self.matrix[ex][ey].occupant
+		self.matrix[ex][ey].occupant = self.matrix[sx][sy].occupant
+		self.matrix[sx][sy].occupant = None
+		return captured
+
+	def _undo_move(self, start, end, captured):
+		"""Reverses a simulated move."""
+		sx, sy = start
+		ex, ey = end
+		self.matrix[sx][sy].occupant = self.matrix[ex][ey].occupant
+		self.matrix[ex][ey].occupant = captured
+
+	def legal_moves_safe(self, coord_tuple):
+		"""
+		Like legal_moves(), but filters out moves that would leave the
+		moving player's own king in check.
+		"""
+		piece = self.location(coord_tuple).occupant
+		if piece is None:
+			return []
+		safe = []
+		for dest in self.legal_moves(coord_tuple):
+			captured = self._simulate_move(coord_tuple, dest)
+			if not self.is_in_check(piece.color):
+				safe.append(dest)
+			self._undo_move(coord_tuple, dest, captured)
+		return safe
+
 class Piece:
 	def __init__(self, color, piece_type, king=False):
 		self.color = color

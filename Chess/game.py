@@ -7,6 +7,7 @@ from pygame import locals
 
 from board import Board
 from common import Colours, Directions
+from win_conditions import ChessWinCondition
 
 try:
     # Python 2
@@ -29,6 +30,9 @@ class Game:
         self.selected_legal_moves = []
         self.click = False
 
+        # Swap this to change how the game is won (e.g. CheckersWinCondition()).
+        self.win_condition = ChessWinCondition()
+
     def setup(self):
         """Draws the window and board at the beginning of the game"""
         self.graphics.setup_window()
@@ -40,7 +44,7 @@ class Game:
         """
         self.mouse_pos = self.graphics.board_coords(pygame.mouse.get_pos())  # what square is the mouse in?
         if self.selected_piece != None:
-            self.selected_legal_moves = self.board.legal_moves(self.selected_piece)
+            self.selected_legal_moves = self.win_condition.safe_moves(self.board, self.selected_piece)
 
         for event in pygame.event.get():
 
@@ -54,7 +58,7 @@ class Game:
                         self.mouse_pos).occupant.color == self.turn:
                     self.selected_piece = self.mouse_pos
 
-                elif self.selected_piece != None and self.mouse_pos in self.board.legal_moves(self.selected_piece):
+                elif self.selected_piece != None and self.mouse_pos in self.win_condition.safe_moves(self.board, self.selected_piece):
                     self.board.move_piece(self.selected_piece, self.mouse_pos)
                     self.end_turn()
 
@@ -81,8 +85,8 @@ class Game:
 
     def end_turn(self):
         """
-        End the turn. Switches the current player.
-        end_turn() also checks for and game and resets a lot of class attributes.
+        End the turn. Switches the current player, then asks the active
+        win condition whether the game is over.
         """
         if self.turn == Colours.WHITE:
             self.turn = Colours.PIECE_BLACK
@@ -92,23 +96,9 @@ class Game:
         self.selected_piece = None
         self.selected_legal_moves = []
 
-        if self.check_for_endgame():
-            if self.turn == Colours.WHITE:
-                self.graphics.draw_message("BLACK WINS!")
-            else:
-                self.graphics.draw_message("WHITE WINS!")
-
-    def check_for_endgame(self):
-        """
-        Checks to see if a player has run out of moves or pieces. If so, then return True. Else return False.
-        """
-        for x in xrange(8):
-            for y in xrange(8):
-                if self.board.location((x, y)).occupant != None and self.board.location((x, y)).occupant.color == self.turn:
-                    if self.board.legal_moves((x, y)) != []:
-                        return False
-
-        return True
+        result = self.win_condition.check(self)
+        if result:
+            self.graphics.draw_message(result)
 
 
 class Graphics:

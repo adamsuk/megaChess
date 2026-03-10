@@ -1,5 +1,9 @@
 {
   "pawn": {
+    "icons": {
+      "white": "assets/pieces/white_pawn.png",
+      "black": "assets/pieces/black_pawn.png"
+    },
     "move_rules": [
       {
         "deltas": [[0, 1]],
@@ -16,6 +20,10 @@
     ]
   },
   "knight": {
+    "icons": {
+      "white": "assets/pieces/white_knight.png",
+      "black": "assets/pieces/black_knight.png"
+    },
     "move_rules": [
       {
         "deltas": [[2,1],[1,2],[-1,2],[-2,1],[-1,-2],[-2,-1],[1,-2],[2,-1]]
@@ -23,21 +31,37 @@
     ]
   },
   "bishop": {
+    "icons": {
+      "white": "assets/pieces/white_bishop.png",
+      "black": "assets/pieces/black_bishop.png"
+    },
     "move_rules": [
       {"deltas": ["diagonal"], "sliding": true}
     ]
   },
   "rook": {
+    "icons": {
+      "white": "assets/pieces/white_rook.png",
+      "black": "assets/pieces/black_rook.png"
+    },
     "move_rules": [
       {"deltas": ["straight"], "sliding": true}
     ]
   },
   "queen": {
+    "icons": {
+      "white": "assets/pieces/white_queen.png",
+      "black": "assets/pieces/black_queen.png"
+    },
     "move_rules": [
       {"deltas": ["diagonal", "straight"], "sliding": true}
     ]
   },
   "king": {
+    "icons": {
+      "white": "assets/pieces/white_king.png",
+      "black": "assets/pieces/black_king.png"
+    },
     "move_rules": [
       {
         "deltas": [[0,1],[1,0],[0,-1],[-1,0],[1,1],[1,-1],[-1,-1],[-1,1]]
@@ -45,6 +69,10 @@
     ]
   },
   "checkers_man": {
+    "icons": {
+      "white": "assets/pieces/white_checkers_man.png",
+      "black": "assets/pieces/black_checkers_man.png"
+    },
     "move_rules": [
       {
         "deltas": [[-1, 1], [1, 1]],
@@ -60,6 +88,10 @@
     ]
   },
   "checkers_king": {
+    "icons": {
+      "white": "assets/pieces/white_checkers_king.png",
+      "black": "assets/pieces/black_checkers_king.png"
+    },
     "move_rules": [
       {
         "deltas": [[-1, 1], [1, 1], [-1, -1], [1, -1]],

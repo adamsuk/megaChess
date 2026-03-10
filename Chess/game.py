@@ -36,6 +36,7 @@ class Game:
     def setup(self):
         """Draws the window and board at the beginning of the game"""
         self.graphics.setup_window()
+        self.graphics.load_piece_icons(self.board.pieces_defs)
 
     def event_loop(self):
         """
@@ -127,7 +128,27 @@ class Graphics:
         self.timed_message_rect = None
         self.timed_message_until = 0  # pygame.time.get_ticks() expiry
 
+        self.piece_icons = {}  # (piece_type, 'white'|'black') -> scaled Surface
+
         self.highlights = False
+
+    def load_piece_icons(self, pieces_defs):
+        """
+        Load and scale piece icon images whose paths are defined in pieces_defs.
+        Missing files are silently skipped; draw_board_pieces falls back to
+        circle+letter rendering for any piece that has no icon loaded.
+        """
+        self.piece_icons = {}
+        icon_size = (self.square_size - 8, self.square_size - 8)
+        for piece_type, defn in pieces_defs.items():
+            for color_name, path in defn.get('icons', {}).items():
+                try:
+                    img = pygame.image.load(path).convert_alpha()
+                    self.piece_icons[(piece_type, color_name)] = (
+                        pygame.transform.smoothscale(img, icon_size)
+                    )
+                except (pygame.error, FileNotFoundError, OSError):
+                    pass  # graceful fallback to circle+letter
 
     def setup_window(self):
         """
@@ -168,7 +189,8 @@ class Graphics:
 
     def draw_board_pieces(self, board):
         """
-        Takes a board object and draws all of its pieces to the display
+        Takes a board object and draws all of its pieces to the display.
+        Uses icon images when available, falls back to circle+letter otherwise.
         """
         piece_labels = {'pawn': 'P', 'rook': 'R', 'knight': 'N', 'bishop': 'B', 'queen': 'Q', 'king': 'K'}
         for x in xrange(8):
@@ -176,13 +198,18 @@ class Graphics:
                 piece = board.matrix[int(x)][int(y)].occupant
                 if piece is not None:
                     center = self.pixel_coords((x, y))
-                    pygame.draw.circle(self.screen, piece.color, center, self.piece_size)
-                    outline = Colours.BLACK if piece.color == Colours.WHITE else Colours.WHITE
-                    pygame.draw.circle(self.screen, outline, center, self.piece_size, 2)
-                    label = piece_labels.get(piece.piece_type, '?')
-                    text_color = Colours.BLACK if piece.color == Colours.WHITE else Colours.WHITE
-                    text_surf = self.piece_font.render(label, True, text_color)
-                    self.screen.blit(text_surf, text_surf.get_rect(center=center))
+                    color_key = 'white' if piece.color == Colours.WHITE else 'black'
+                    icon = self.piece_icons.get((piece.piece_type, color_key))
+                    if icon:
+                        self.screen.blit(icon, icon.get_rect(center=center))
+                    else:
+                        pygame.draw.circle(self.screen, piece.color, center, self.piece_size)
+                        outline = Colours.BLACK if piece.color == Colours.WHITE else Colours.WHITE
+                        pygame.draw.circle(self.screen, outline, center, self.piece_size, 2)
+                        label = piece_labels.get(piece.piece_type, '?')
+                        text_color = Colours.BLACK if piece.color == Colours.WHITE else Colours.WHITE
+                        text_surf = self.piece_font.render(label, True, text_color)
+                        self.screen.blit(text_surf, text_surf.get_rect(center=center))
 
     def pixel_coords(self, board_coords):
         """

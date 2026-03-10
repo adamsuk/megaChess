@@ -155,6 +155,7 @@ class Graphics:
         self.clock = pygame.time.Clock()
 
         self.window_size = 600
+        pygame.init()
         self.screen = pygame.display.set_mode((self.window_size, self.window_size))
         # self.background = pygame.image.load('resources/board.png')
         
@@ -176,13 +177,11 @@ class Graphics:
         """
         This updates the current display.
         """
-        # self.screen.blit(self.background, (0,0))
-        print('click: {}'.format(click))
-        print('self.highlights: {}'.format(self.highlights))
+        self.draw_board_squares(board)
         if click:
             self.highlight_squares(legal_moves, self.pixel_coords(mouse_pos))
         elif not click and self.highlights:
-            self.del_highlight_squares(board)
+            self.highlights = False
 
         self.draw_board_pieces(board)
 
@@ -229,8 +228,9 @@ class Graphics:
         Does the reverse of pixel_coords(). Takes in a tuple of of pixel coordinates and returns what square they are in.
         """
         pixel_x, pixel_y = pixel_coords_tuple
-        #print(pixel_x / self.square_size, pixel_y / self.square_size)
-        return (pixel_x // self.square_size, pixel_y // self.square_size)
+        x = min(max(pixel_x // self.square_size, 0), 7)
+        y = min(max(pixel_y // self.square_size, 0), 7)
+        return (x, y)
 
     def highlight_squares(self, squares, origin):
         """

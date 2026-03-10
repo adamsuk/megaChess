@@ -1,14 +1,13 @@
 """
 The main game control.
 """
-import io
 import pygame
 import sys
-import cairosvg
 from pygame import locals
 
 from board import Board
 from common import Colours, Directions
+from svg_renderer import render_svg
 from win_conditions import ChessWinCondition
 
 try:
@@ -160,13 +159,9 @@ class Graphics:
                 continue
             for color_name, colours in self.ICON_COLOURS.items():
                 try:
-                    svg = template.replace('{fill}', colours['fill']) \
+                    svg = template.replace('{fill}',   colours['fill']) \
                                   .replace('{stroke}', colours['stroke'])
-                    png = cairosvg.svg2png(bytestring=svg.encode(),
-                                          output_width=px, output_height=px)
-                    self.piece_icons[(piece_type, color_name)] = (
-                        pygame.image.load(io.BytesIO(png)).convert_alpha()
-                    )
+                    self.piece_icons[(piece_type, color_name)] = render_svg(svg, (px, px))
                 except Exception:
                     pass
 

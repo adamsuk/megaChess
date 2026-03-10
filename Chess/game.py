@@ -1,8 +1,10 @@
 """
 The main game control.
 """
+import io
 import pygame
 import sys
+import cairosvg
 from pygame import locals
 
 from board import Board
@@ -132,23 +134,41 @@ class Graphics:
 
         self.highlights = False
 
+    # Hex colours used to colorize SVG templates for each side
+    ICON_COLOURS = {
+        'white': {'fill': '#F0F0E6', 'stroke': '#3C3C3C'},
+        'black': {'fill': '#281E1E', 'stroke': '#C8C8C8'},
+    }
+
     def load_piece_icons(self, pieces_defs):
         """
-        Load and scale piece icon images whose paths are defined in pieces_defs.
-        Missing files are silently skipped; draw_board_pieces falls back to
-        circle+letter rendering for any piece that has no icon loaded.
+        For each piece definition that has an "icon" SVG path, render a
+        colourised copy for white and black by substituting {fill}/{stroke}
+        template variables, converting via cairosvg, and loading the result
+        into a pygame Surface.  Missing files are silently skipped; the
+        circle+letter fallback in draw_board_pieces handles those pieces.
         """
         self.piece_icons = {}
-        icon_size = (self.square_size - 8, self.square_size - 8)
+        px = self.square_size - 8
         for piece_type, defn in pieces_defs.items():
-            for color_name, path in defn.get('icons', {}).items():
+            path = defn.get('icon')
+            if not path:
+                continue
+            try:
+                template = open(path).read()
+            except (FileNotFoundError, OSError):
+                continue
+            for color_name, colours in self.ICON_COLOURS.items():
                 try:
-                    img = pygame.image.load(path).convert_alpha()
+                    svg = template.replace('{fill}', colours['fill']) \
+                                  .replace('{stroke}', colours['stroke'])
+                    png = cairosvg.svg2png(bytestring=svg.encode(),
+                                          output_width=px, output_height=px)
                     self.piece_icons[(piece_type, color_name)] = (
-                        pygame.transform.smoothscale(img, icon_size)
+                        pygame.image.load(io.BytesIO(png)).convert_alpha()
                     )
-                except (pygame.error, FileNotFoundError, OSError):
-                    pass  # graceful fallback to circle+letter
+                except Exception:
+                    pass
 
     def setup_window(self):
         """

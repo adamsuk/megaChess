@@ -3,6 +3,8 @@ import sys
 from pygame import locals
 
 from common import Colours, Directions
+from pieces import AllPieces
+from positions import ChessMoves
 
 try:
     # Python 2
@@ -15,6 +17,7 @@ pygame.font.init()
 
 class Board:
 	def __init__(self):
+		self.pieces_defs = AllPieces().pieces_defs
 		self.new_board()
 
 	def draw_board_squares(self):
@@ -91,51 +94,23 @@ class Board:
 		x, y = coord_tuple
 		return self.matrix[int(x)][int(y)]
 
-	def blind_legal_moves(self, coord_tuple):
+	def legal_moves(self, coord_tuple, hop=False):
 		"""
-		Returns a list of blind legal move locations from a set of coordinates (x,y) on the board. 
-		If that location is empty, then blind_legal_moves() return an empty list.
-		"""
-		x, y = coord_tuple
-		if self.matrix[int(x)][int(y)].occupant != None:
-			if self.matrix[int(x)][int(y)].occupant.color == Colours.WHITE:
-				blind_legal_moves = [self.rel(Directions.NORTHWEST, (x,y)), self.rel(Directions.NORTHEAST, (x,y))]
-			else:
-				blind_legal_moves = [self.rel(Directions.SOUTHWEST, (x,y)), self.rel(Directions.SOUTHEAST, (x,y))]
-
-		else:
-			blind_legal_moves = []
-
-		return blind_legal_moves
-
-	def legal_moves(self, coord_tuple, hop = False):
-		"""
-		Returns a list of legal move locations from a given set of coordinates (x,y) on the board.
-		If that location is empty, then legal_moves() returns an empty list.
+		Returns a list of legal move locations for the piece at (x,y).
+		Uses ChessMoves to compute per-piece-type chess movement from pieces_defs.json.
 		"""
 		x, y = coord_tuple
-		# TODO some logic that ensures the legal positions are piece centered (currently passing in cursor centered but
-		#  this should also include logic to piece center coordinates.
-		blind_legal_moves = self.blind_legal_moves((x,y)) 
-		legal_moves = []
-
-		if hop == False:
-			for move in blind_legal_moves:
-				if hop == False:
-					if self.on_board(move):
-						if self.location(move).occupant == None:
-							legal_moves.append(move)
-
-						elif self.location(move).occupant.color != self.location((x,y)).occupant.color and self.on_board((move[0] + (move[0] - x), move[1] + (move[1] - y))) and self.location((move[0] + (move[0] - x), move[1] + (move[1] - y))).occupant == None: # is this location filled by an enemy piece?
-							legal_moves.append((move[0] + (move[0] - x), move[1] + (move[1] - y)))
-
-		else: # hop == True
-			for move in blind_legal_moves:
-				if self.on_board(move) and self.location(move).occupant != None:
-					if self.location(move).occupant.color != self.location((x,y)).occupant.color and self.on_board((move[0] + (move[0] - x), move[1] + (move[1] - y))) and self.location((move[0] + (move[0] - x), move[1] + (move[1] - y))).occupant == None: # is this location filled by an enemy piece?
-						legal_moves.append((move[0] + (move[0] - x), move[1] + (move[1] - y)))
-
-		return legal_moves
+		piece = self.matrix[int(x)][int(y)].occupant
+		if piece is None:
+			return []
+		return ChessMoves(
+			pos=(x, y),
+			piece_type=piece.piece_type,
+			piece_color=piece.color,
+			board_matrix=self.matrix,
+			piece_defs=self.pieces_defs,
+			white_color=Colours.WHITE
+		).legal
 
 	def nearest_square(self, mouse_pos):
 		return self.matrix[int(mouse_pos[1])][int(mouse_pos[0])].coords

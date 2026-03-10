@@ -18,18 +18,10 @@ class Board:
 		self.new_board()
 
 	def draw_board_squares(self):
-		# The following code block has been adapted from
-		# http://itgirl.dreamhosters.com/itgirlgames/games/Program%20Leaders/ClareR/Checkers/checkers.py
 		for x in xrange(8):
 			for y in xrange(8):
-				if (x % 2 != 0) and (y % 2 == 0):
-					self.matrix[int(y)][int(x)] = Square(Colours.WHITE, (x,y))
-				elif (x % 2 != 0) and (y % 2 != 0):
-					self.matrix[int(y)][int(x)] = Square(Colours.BLACK, (x,y))
-				elif (x % 2 == 0) and (y % 2 != 0):
-					self.matrix[int(y)][int(x)] = Square(Colours.WHITE, (x,y))
-				elif (x % 2 == 0) and (y % 2 == 0): 
-					self.matrix[int(y)][int(x)] = Square(Colours.BLACK, (x,y))
+				color = Colours.CREAM if (x + y) % 2 == 0 else Colours.BROWN
+				self.matrix[int(y)][int(x)] = Square(color, (x, y))
 
 	def new_board(self):
 		"""
@@ -43,15 +35,13 @@ class Board:
 		# initialize the board squares
 		self.draw_board_squares()
 
-		# initialize the pieces and put them in the appropriate squares
-
+		# initialize chess pieces in starting positions
+		back_rank = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook']
 		for x in xrange(8):
-			for y in xrange(3):
-				if self.matrix[int(x)][int(y)].color == Colours.BLACK:
-					self.matrix[int(x)][int(y)].occupant = Piece(Colours.RED)
-			for y in xrange(5, 8):
-				if self.matrix[int(x)][int(y)].color == Colours.BLACK:
-					self.matrix[int(x)][int(y)].occupant = Piece(Colours.BLUE)
+			self.matrix[x][0].occupant = Piece(Colours.PIECE_BLACK, back_rank[x])
+			self.matrix[x][1].occupant = Piece(Colours.PIECE_BLACK, 'pawn')
+			self.matrix[x][6].occupant = Piece(Colours.WHITE, 'pawn')
+			self.matrix[x][7].occupant = Piece(Colours.WHITE, back_rank[x])
 
 
 	def rel(self, dir, coord_tuple):
@@ -232,8 +222,9 @@ class Board:
 				self.location((x,y)).occupant.king = True 
 
 class Piece:
-	def __init__(self, color, king=False):
+	def __init__(self, color, piece_type, king=False):
 		self.color = color
+		self.piece_type = piece_type
 		self.king = king
 
 class Square:

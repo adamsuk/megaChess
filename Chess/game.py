@@ -162,6 +162,7 @@ class Graphics:
         
         self.square_size = self.window_size // 8
         self.piece_size = self.square_size // 2
+        self.piece_font = pygame.font.SysFont(None, self.piece_size)
 
         self.message = False
 
@@ -205,17 +206,19 @@ class Graphics:
         """
         Takes a board object and draws all of its pieces to the display
         """
+        piece_labels = {'pawn': 'P', 'rook': 'R', 'knight': 'N', 'bishop': 'B', 'queen': 'Q', 'king': 'K'}
         for x in xrange(8):
             for y in xrange(8):
-                if board.matrix[int(x)][int(y)].occupant != None:
-                    #print(self.screen, board.matrix[int(x)][int(y)].occupant.color, self.pixel_coords((x, y)),
-                    #      self.piece_size)
-                    pygame.draw.circle(self.screen, board.matrix[int(x)][int(y)].occupant.color,
-                                       self.pixel_coords((x, y)), self.piece_size)
-
-                    if board.location((x, y)).occupant.king == True:
-                        pygame.draw.circle(self.screen, Colours.GOLD, self.pixel_coords((x, y)), int(self.piece_size / 1.7),
-                                           self.piece_size // 4)
+                piece = board.matrix[int(x)][int(y)].occupant
+                if piece is not None:
+                    center = self.pixel_coords((x, y))
+                    pygame.draw.circle(self.screen, piece.color, center, self.piece_size)
+                    outline = Colours.BLACK if piece.color == Colours.WHITE else Colours.WHITE
+                    pygame.draw.circle(self.screen, outline, center, self.piece_size, 2)
+                    label = piece_labels.get(piece.piece_type, '?')
+                    text_color = Colours.BLACK if piece.color == Colours.WHITE else Colours.WHITE
+                    text_surf = self.piece_font.render(label, True, text_color)
+                    self.screen.blit(text_surf, text_surf.get_rect(center=center))
 
     def pixel_coords(self, board_coords):
         """

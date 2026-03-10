@@ -98,7 +98,10 @@ class Game:
 
         result = self.win_condition.check(self)
         if result:
-            self.graphics.draw_message(result)
+            if result.permanent:
+                self.graphics.draw_message(result.message)
+            else:
+                self.graphics.draw_timed_message(result.message)
 
 
 class Graphics:
@@ -119,6 +122,10 @@ class Graphics:
         self.piece_font = pygame.font.SysFont(None, self.piece_size)
 
         self.message = False
+
+        self.timed_message_surface = None
+        self.timed_message_rect = None
+        self.timed_message_until = 0  # pygame.time.get_ticks() expiry
 
         self.highlights = False
 
@@ -143,6 +150,9 @@ class Graphics:
 
         if self.message:
             self.screen.blit(self.text_surface_obj, self.text_rect_obj)
+
+        if self.timed_message_surface and pygame.time.get_ticks() < self.timed_message_until:
+            self.screen.blit(self.timed_message_surface, self.timed_message_rect)
 
         pygame.display.update()
         self.clock.tick(self.fps)
@@ -213,14 +223,20 @@ class Graphics:
         self.highlights = False
 
     def draw_message(self, message):
-        """
-        Draws message to the screen.
-        """
+        """Draws a permanent centred message (win / stalemate)."""
         self.message = True
         self.font_obj = pygame.font.Font('freesansbold.ttf', 44)
         self.text_surface_obj = self.font_obj.render(message, True, Colours.HIGH, Colours.BLACK)
         self.text_rect_obj = self.text_surface_obj.get_rect()
         self.text_rect_obj.center = (self.window_size / 2, self.window_size / 2)
+
+    def draw_timed_message(self, message, duration_ms=3000):
+        """Draws a temporary message near the top of the board that expires after duration_ms."""
+        font = pygame.font.Font('freesansbold.ttf', 36)
+        self.timed_message_surface = font.render(message, True, Colours.BLACK, Colours.HIGH)
+        self.timed_message_rect = self.timed_message_surface.get_rect()
+        self.timed_message_rect.center = (self.window_size // 2, self.square_size // 2)
+        self.timed_message_until = pygame.time.get_ticks() + duration_ms
 
 
 def main():

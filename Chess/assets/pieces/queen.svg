@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+  <!-- Crown: 3 points, wider spread -->
+  <polygon points="14,44 14,22 27,36 40,10 53,36 66,22 66,44"
+           fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Ball on each crown tip -->
+  <circle cx="14" cy="22" r="5" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <circle cx="40" cy="10" r="5" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <circle cx="66" cy="22" r="5" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Body tapers down from crown -->
+  <polygon points="14,44 20,62 60,62 66,44" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Collar -->
+  <rect x="14" y="62" width="52" height="5" rx="2" fill="{fill}" stroke="{stroke}" stroke-width="1.5"/>
+  <!-- Base -->
+  <rect x="10" y="65" width="60" height="12" rx="5" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+</svg>

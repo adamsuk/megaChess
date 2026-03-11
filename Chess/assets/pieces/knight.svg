@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+  <!-- Horse head profile facing right, drawn with cubic bezier curves -->
+  <path d="M 20 68 L 52 68
+           C 54 64 54 60 52 56
+           C 60 52 64 46 62 38
+           C 60 28 54 20 46 16
+           C 42 12 36 10 32 14
+           C 28 16 24 20 22 26
+           C 20 32 20 44 20 68 Z"
+        fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Ear -->
+  <polygon points="32,14 38,8 46,16 40,18" fill="{fill}" stroke="{stroke}" stroke-width="1.5"/>
+  <!-- Eye -->
+  <circle cx="50" cy="22" r="3" fill="{stroke}"/>
+  <!-- Nostril -->
+  <circle cx="60" cy="44" r="2" fill="{stroke}"/>
+  <!-- Mane highlight -->
+  <path d="M 22 26 C 26 34 26 44 24 54" fill="none" stroke="{stroke}" stroke-width="1.5"/>
+</svg>

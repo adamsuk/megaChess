@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+  <!-- Ball -->
+  <circle cx="40" cy="13" r="9" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Mitre notch (diagonal slash) -->
+  <line x1="33" y1="7" x2="47" y2="19" stroke="{stroke}" stroke-width="2.5"/>
+  <!-- Tapered body -->
+  <polygon points="36,21 24,59 56,59 44,21" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Collar -->
+  <rect x="18" y="59" width="44" height="5" rx="2" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Base -->
+  <rect x="12" y="62" width="56" height="12" rx="5" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+</svg>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+  <!-- Head -->
+  <circle cx="40" cy="19" r="13" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Neck: smooth hourglass curves outward toward the base -->
+  <path d="M 35 31 Q 27 44 22 55 L 58 55 Q 53 44 45 31 Z"
+        fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Collar -->
+  <rect x="18" y="55" width="44" height="5" rx="2" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Base -->
+  <rect x="12" y="58" width="56" height="14" rx="5" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+</svg>

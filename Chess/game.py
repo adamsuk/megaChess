@@ -7,6 +7,8 @@ from pygame import locals
 
 from board import Board
 from common import Colours, Directions
+from svg_renderer import render_svg
+from win_conditions import ChessWinCondition
 
 try:
     # Python 2
@@ -24,15 +26,18 @@ class Game:
         self.graphics = Graphics()
         self.board = Board()
 
-        self.turn = Colours.BLUE
+        self.turn = Colours.WHITE
         self.selected_piece = None  # a board location.
-        self.hop = False
         self.selected_legal_moves = []
         self.click = False
+
+        # Swap this to change how the game is won (e.g. CheckersWinCondition()).
+        self.win_condition = ChessWinCondition()
 
     def setup(self):
         """Draws the window and board at the beginning of the game"""
         self.graphics.setup_window()
+        self.graphics.load_piece_icons(self.board.pieces_defs)
 
     def event_loop(self):
         """
@@ -41,7 +46,7 @@ class Game:
         """
         self.mouse_pos = self.graphics.board_coords(pygame.mouse.get_pos())  # what square is the mouse in?
         if self.selected_piece != None:
-            self.selected_legal_moves = self.board.legal_moves(self.selected_piece, self.hop)
+            self.selected_legal_moves = self.win_condition.safe_moves(self.board, self.selected_piece)
 
         for event in pygame.event.get():
 
@@ -51,46 +56,13 @@ class Game:
             self.click = event.type == locals.MOUSEBUTTONDOWN
 
             if self.click:
-                print('mouse_pos: {}'.format(self.mouse_pos))
-                selected_square = self.board.nearest_square(self.mouse_pos)
-                print('selected_square: {}'.format(selected_square))
-                selected_pixels = self.graphics.pixel_coords(selected_square)
-                print('selected_pixels: {}'.format(selected_pixels))
+                if self.board.location(self.mouse_pos).occupant != None and self.board.location(
+                        self.mouse_pos).occupant.color == self.turn:
+                    self.selected_piece = self.mouse_pos
 
-                if self.hop == False:
-                    if self.board.location(self.mouse_pos).occupant != None and self.board.location(
-                            self.mouse_pos).occupant.color == self.turn:
-                        # TODO: this centers on the cursor not the piece - ie a self.board method
-                        self.selected_piece = selected_square
-
-                    elif self.selected_piece != None and self.mouse_pos in self.board.legal_moves(self.selected_piece):
-
-                        self.board.move_piece(self.selected_piece, selected_square)
-
-                        if self.mouse_pos not in self.board.adjacent(self.selected_piece):
-                            self.board.remove_piece((self.selected_piece[0] + (
-                                        self.mouse_pos[0] - self.selected_piece[0]) // 2, self.selected_piece[1] + (
-                                                                 self.mouse_pos[1] - self.selected_piece[1]) // 2))
-
-                            self.hop = True
-                            self.selected_piece = selected_square
-
-                        else:
-                            self.end_turn()
-
-                if self.hop == True:
-                    if self.selected_piece != None and self.mouse_pos in self.board.legal_moves(self.selected_piece,
-                                                                                                self.hop):
-                        self.board.move_piece(self.selected_piece, selected_square)
-                        self.board.remove_piece((self.selected_piece[0] + (
-                                    self.mouse_pos[0] - self.selected_piece[0]) // 2, self.selected_piece[1] + (
-                                                             self.mouse_pos[1] - self.selected_piece[1]) // 2))
-
-                    if self.board.legal_moves(self.mouse_pos, self.hop) == []:
-                        self.end_turn()
-
-                    else:
-                        self.selected_piece = selected_square
+                elif self.selected_piece != None and self.mouse_pos in self.win_condition.safe_moves(self.board, self.selected_piece):
+                    self.board.move_piece(self.selected_piece, self.mouse_pos)
+                    self.end_turn()
 
     def update(self):
         """Calls on the graphics class to update the game display."""
@@ -115,36 +87,23 @@ class Game:
 
     def end_turn(self):
         """
-        End the turn. Switches the current player.
-        end_turn() also checks for and game and resets a lot of class attributes.
+        End the turn. Switches the current player, then asks the active
+        win condition whether the game is over.
         """
-        if self.turn == Colours.BLUE:
-            self.turn = Colours.RED
+        if self.turn == Colours.WHITE:
+            self.turn = Colours.PIECE_BLACK
         else:
-            self.turn = Colours.BLUE
+            self.turn = Colours.WHITE
 
         self.selected_piece = None
         self.selected_legal_moves = []
-        self.hop = False
 
-        if self.check_for_endgame():
-            if self.turn == Colours.BLUE:
-                self.graphics.draw_message("RED WINS!")
+        result = self.win_condition.check(self)
+        if result:
+            if result.permanent:
+                self.graphics.draw_message(result.message)
             else:
-                self.graphics.draw_message("BLUE WINS!")
-
-    def check_for_endgame(self):
-        """
-        Checks to see if a player has run out of moves or pieces. If so, then return True. Else return False.
-        """
-        for x in xrange(8):
-            for y in xrange(8):
-                if self.board.location((x, y)).color == Colours.BLACK and self.board.location(
-                        (x, y)).occupant != None and self.board.location((x, y)).occupant.color == self.turn:
-                    if self.board.legal_moves((x, y)) != []:
-                        return False
-
-        return True
+                self.graphics.draw_timed_message(result.message)
 
 
 class Graphics:
@@ -162,10 +121,49 @@ class Graphics:
         
         self.square_size = self.window_size // 8
         self.piece_size = self.square_size // 2
+        self.piece_font = pygame.font.SysFont(None, self.piece_size)
 
         self.message = False
 
+        self.timed_message_surface = None
+        self.timed_message_rect = None
+        self.timed_message_until = 0  # pygame.time.get_ticks() expiry
+
+        self.piece_icons = {}  # (piece_type, 'white'|'black') -> scaled Surface
+
         self.highlights = False
+
+    # Hex colours used to colorize SVG templates for each side
+    ICON_COLOURS = {
+        'white': {'fill': '#F0F0E6', 'stroke': '#3C3C3C'},
+        'black': {'fill': '#281E1E', 'stroke': '#C8C8C8'},
+    }
+
+    def load_piece_icons(self, pieces_defs):
+        """
+        For each piece definition that has an "icon" SVG path, render a
+        colourised copy for white and black by substituting {fill}/{stroke}
+        template variables, converting via cairosvg, and loading the result
+        into a pygame Surface.  Missing files are silently skipped; the
+        circle+letter fallback in draw_board_pieces handles those pieces.
+        """
+        self.piece_icons = {}
+        px = self.square_size - 8
+        for piece_type, defn in pieces_defs.items():
+            path = defn.get('icon')
+            if not path:
+                continue
+            try:
+                template = open(path).read()
+            except (FileNotFoundError, OSError):
+                continue
+            for color_name, colours in self.ICON_COLOURS.items():
+                try:
+                    svg = template.replace('{fill}',   colours['fill']) \
+                                  .replace('{stroke}', colours['stroke'])
+                    self.piece_icons[(piece_type, color_name)] = render_svg(svg, (px, px))
+                except Exception:
+                    pass
 
     def setup_window(self):
         """
@@ -189,6 +187,9 @@ class Graphics:
         if self.message:
             self.screen.blit(self.text_surface_obj, self.text_rect_obj)
 
+        if self.timed_message_surface and pygame.time.get_ticks() < self.timed_message_until:
+            self.screen.blit(self.timed_message_surface, self.timed_message_rect)
+
         pygame.display.update()
         self.clock.tick(self.fps)
 
@@ -203,19 +204,27 @@ class Graphics:
 
     def draw_board_pieces(self, board):
         """
-        Takes a board object and draws all of its pieces to the display
+        Takes a board object and draws all of its pieces to the display.
+        Uses icon images when available, falls back to circle+letter otherwise.
         """
+        piece_labels = {'pawn': 'P', 'rook': 'R', 'knight': 'N', 'bishop': 'B', 'queen': 'Q', 'king': 'K'}
         for x in xrange(8):
             for y in xrange(8):
-                if board.matrix[int(x)][int(y)].occupant != None:
-                    #print(self.screen, board.matrix[int(x)][int(y)].occupant.color, self.pixel_coords((x, y)),
-                    #      self.piece_size)
-                    pygame.draw.circle(self.screen, board.matrix[int(x)][int(y)].occupant.color,
-                                       self.pixel_coords((x, y)), self.piece_size)
-
-                    if board.location((x, y)).occupant.king == True:
-                        pygame.draw.circle(self.screen, Colours.GOLD, self.pixel_coords((x, y)), int(self.piece_size / 1.7),
-                                           self.piece_size // 4)
+                piece = board.matrix[int(x)][int(y)].occupant
+                if piece is not None:
+                    center = self.pixel_coords((x, y))
+                    color_key = 'white' if piece.color == Colours.WHITE else 'black'
+                    icon = self.piece_icons.get((piece.piece_type, color_key))
+                    if icon:
+                        self.screen.blit(icon, icon.get_rect(center=center))
+                    else:
+                        pygame.draw.circle(self.screen, piece.color, center, self.piece_size)
+                        outline = Colours.BLACK if piece.color == Colours.WHITE else Colours.WHITE
+                        pygame.draw.circle(self.screen, outline, center, self.piece_size, 2)
+                        label = piece_labels.get(piece.piece_type, '?')
+                        text_color = Colours.BLACK if piece.color == Colours.WHITE else Colours.WHITE
+                        text_surf = self.piece_font.render(label, True, text_color)
+                        self.screen.blit(text_surf, text_surf.get_rect(center=center))
 
     def pixel_coords(self, board_coords):
         """
@@ -256,14 +265,20 @@ class Graphics:
         self.highlights = False
 
     def draw_message(self, message):
-        """
-        Draws message to the screen.
-        """
+        """Draws a permanent centred message (win / stalemate)."""
         self.message = True
         self.font_obj = pygame.font.Font('freesansbold.ttf', 44)
         self.text_surface_obj = self.font_obj.render(message, True, Colours.HIGH, Colours.BLACK)
         self.text_rect_obj = self.text_surface_obj.get_rect()
         self.text_rect_obj.center = (self.window_size / 2, self.window_size / 2)
+
+    def draw_timed_message(self, message, duration_ms=3000):
+        """Draws a temporary message near the top of the board that expires after duration_ms."""
+        font = pygame.font.Font('freesansbold.ttf', 36)
+        self.timed_message_surface = font.render(message, True, Colours.BLACK, Colours.HIGH)
+        self.timed_message_rect = self.timed_message_surface.get_rect()
+        self.timed_message_rect.center = (self.window_size // 2, self.square_size // 2)
+        self.timed_message_until = pygame.time.get_ticks() + duration_ms
 
 
 def main():

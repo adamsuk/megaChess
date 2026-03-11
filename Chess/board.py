@@ -3,6 +3,8 @@ import sys
 from pygame import locals
 
 from common import Colours, Directions
+from pieces import AllPieces
+from positions import PieceMoves
 
 try:
     # Python 2
@@ -15,21 +17,14 @@ pygame.font.init()
 
 class Board:
 	def __init__(self):
+		self.pieces_defs = AllPieces().pieces_defs
 		self.new_board()
 
 	def draw_board_squares(self):
-		# The following code block has been adapted from
-		# http://itgirl.dreamhosters.com/itgirlgames/games/Program%20Leaders/ClareR/Checkers/checkers.py
 		for x in xrange(8):
 			for y in xrange(8):
-				if (x % 2 != 0) and (y % 2 == 0):
-					self.matrix[int(y)][int(x)] = Square(Colours.WHITE, (x,y))
-				elif (x % 2 != 0) and (y % 2 != 0):
-					self.matrix[int(y)][int(x)] = Square(Colours.BLACK, (x,y))
-				elif (x % 2 == 0) and (y % 2 != 0):
-					self.matrix[int(y)][int(x)] = Square(Colours.WHITE, (x,y))
-				elif (x % 2 == 0) and (y % 2 == 0): 
-					self.matrix[int(y)][int(x)] = Square(Colours.BLACK, (x,y))
+				color = Colours.CREAM if (x + y) % 2 == 0 else Colours.BROWN
+				self.matrix[int(y)][int(x)] = Square(color, (x, y))
 
 	def new_board(self):
 		"""
@@ -43,15 +38,13 @@ class Board:
 		# initialize the board squares
 		self.draw_board_squares()
 
-		# initialize the pieces and put them in the appropriate squares
-
+		# initialize chess pieces in starting positions
+		back_rank = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook']
 		for x in xrange(8):
-			for y in xrange(3):
-				if self.matrix[int(x)][int(y)].color == Colours.BLACK:
-					self.matrix[int(x)][int(y)].occupant = Piece(Colours.RED)
-			for y in xrange(5, 8):
-				if self.matrix[int(x)][int(y)].color == Colours.BLACK:
-					self.matrix[int(x)][int(y)].occupant = Piece(Colours.BLUE)
+			self.matrix[x][0].occupant = Piece(Colours.PIECE_BLACK, back_rank[x])
+			self.matrix[x][1].occupant = Piece(Colours.PIECE_BLACK, 'pawn')
+			self.matrix[x][6].occupant = Piece(Colours.WHITE, 'pawn')
+			self.matrix[x][7].occupant = Piece(Colours.WHITE, back_rank[x])
 
 
 	def rel(self, dir, coord_tuple):
@@ -101,56 +94,23 @@ class Board:
 		x, y = coord_tuple
 		return self.matrix[int(x)][int(y)]
 
-	def blind_legal_moves(self, coord_tuple):
+	def legal_moves(self, coord_tuple, hop=False):
 		"""
-		Returns a list of blind legal move locations from a set of coordinates (x,y) on the board. 
-		If that location is empty, then blind_legal_moves() return an empty list.
-		"""
-		x, y = coord_tuple
-		if self.matrix[int(x)][int(y)].occupant != None:
-			
-			if self.matrix[int(x)][int(y)].occupant.king == False and self.matrix[int(x)][int(y)].occupant.color == Colours.BLUE:
-				blind_legal_moves = [self.rel(Directions.NORTHWEST, (x,y)), self.rel(Directions.NORTHEAST, (x,y))]
-				
-			elif self.matrix[int(x)][int(y)].occupant.king == False and self.matrix[int(x)][int(y)].occupant.color == Colours.RED:
-				blind_legal_moves = [self.rel(Directions.SOUTHWEST, (x,y)), self.rel(Directions.SOUTHEAST, (x,y))]
-
-			else:
-				blind_legal_moves = [self.rel(Directions.NORTHWEST, (x,y)), self.rel(Directions.NORTHEAST, (x,y)), self.rel(Directions.SOUTHWEST, (x,y)), self.rel(Directions.SOUTHEAST, (x,y))]
-
-		else:
-			blind_legal_moves = []
-
-		return blind_legal_moves
-
-	def legal_moves(self, coord_tuple, hop = False):
-		"""
-		Returns a list of legal move locations from a given set of coordinates (x,y) on the board.
-		If that location is empty, then legal_moves() returns an empty list.
+		Returns a list of legal move locations for the piece at (x,y).
+		Uses ChessMoves to compute per-piece-type chess movement from pieces_defs.json.
 		"""
 		x, y = coord_tuple
-		# TODO some logic that ensures the legal positions are piece centered (currently passing in cursor centered but
-		#  this should also include logic to piece center coordinates.
-		blind_legal_moves = self.blind_legal_moves((x,y)) 
-		legal_moves = []
-
-		if hop == False:
-			for move in blind_legal_moves:
-				if hop == False:
-					if self.on_board(move):
-						if self.location(move).occupant == None:
-							legal_moves.append(move)
-
-						elif self.location(move).occupant.color != self.location((x,y)).occupant.color and self.on_board((move[0] + (move[0] - x), move[1] + (move[1] - y))) and self.location((move[0] + (move[0] - x), move[1] + (move[1] - y))).occupant == None: # is this location filled by an enemy piece?
-							legal_moves.append((move[0] + (move[0] - x), move[1] + (move[1] - y)))
-
-		else: # hop == True
-			for move in blind_legal_moves:
-				if self.on_board(move) and self.location(move).occupant != None:
-					if self.location(move).occupant.color != self.location((x,y)).occupant.color and self.on_board((move[0] + (move[0] - x), move[1] + (move[1] - y))) and self.location((move[0] + (move[0] - x), move[1] + (move[1] - y))).occupant == None: # is this location filled by an enemy piece?
-						legal_moves.append((move[0] + (move[0] - x), move[1] + (move[1] - y)))
-
-		return legal_moves
+		piece = self.matrix[int(x)][int(y)].occupant
+		if piece is None:
+			return []
+		return PieceMoves(
+			pos=(x, y),
+			piece_type=piece.piece_type,
+			piece_color=piece.color,
+			board_matrix=self.matrix,
+			piece_defs=self.pieces_defs,
+			white_color=Colours.WHITE
+		).legal
 
 	def nearest_square(self, mouse_pos):
 		return self.matrix[int(mouse_pos[1])][int(mouse_pos[0])].coords
@@ -227,13 +187,77 @@ class Board:
 		If it meets the criteria, then king() kings the piece in that square and kings it.
 		"""
 		x, y = coord_tuple
-		if self.location((x,y)).occupant != None:
-			if (self.location((x,y)).occupant.color == Colours.BLUE and y == 0) or (self.location((x,y)).occupant.color == Colours.RED and y == 7):
-				self.location((x,y)).occupant.king = True 
+		pass
+
+	# ------------------------------------------------------------------
+	# Check / checkmate helpers
+	# ------------------------------------------------------------------
+
+	def find_king(self, color):
+		"""Returns (x, y) of the king belonging to `color`, or None."""
+		for x in xrange(8):
+			for y in xrange(8):
+				piece = self.matrix[x][y].occupant
+				if piece and piece.color == color and piece.piece_type == 'king':
+					return (x, y)
+		return None
+
+	def is_in_check(self, color):
+		"""Returns True if the king of `color` is currently under attack."""
+		king_pos = self.find_king(color)
+		if king_pos is None:
+			return False
+		for x in xrange(8):
+			for y in xrange(8):
+				piece = self.matrix[x][y].occupant
+				if piece and piece.color != color:
+					if king_pos in PieceMoves(
+						pos=(x, y),
+						piece_type=piece.piece_type,
+						piece_color=piece.color,
+						board_matrix=self.matrix,
+						piece_defs=self.pieces_defs,
+						white_color=Colours.WHITE
+					).legal:
+						return True
+		return False
+
+	def _simulate_move(self, start, end):
+		"""Temporarily applies a move. Returns the piece that was on `end` (may be None)."""
+		sx, sy = start
+		ex, ey = end
+		captured = self.matrix[ex][ey].occupant
+		self.matrix[ex][ey].occupant = self.matrix[sx][sy].occupant
+		self.matrix[sx][sy].occupant = None
+		return captured
+
+	def _undo_move(self, start, end, captured):
+		"""Reverses a simulated move."""
+		sx, sy = start
+		ex, ey = end
+		self.matrix[sx][sy].occupant = self.matrix[ex][ey].occupant
+		self.matrix[ex][ey].occupant = captured
+
+	def legal_moves_safe(self, coord_tuple):
+		"""
+		Like legal_moves(), but filters out moves that would leave the
+		moving player's own king in check.
+		"""
+		piece = self.location(coord_tuple).occupant
+		if piece is None:
+			return []
+		safe = []
+		for dest in self.legal_moves(coord_tuple):
+			captured = self._simulate_move(coord_tuple, dest)
+			if not self.is_in_check(piece.color):
+				safe.append(dest)
+			self._undo_move(coord_tuple, dest, captured)
+		return safe
 
 class Piece:
-	def __init__(self, color, king=False):
+	def __init__(self, color, piece_type, king=False):
 		self.color = color
+		self.piece_type = piece_type
 		self.king = king
 
 class Square:

@@ -6,6 +6,9 @@ class Colours:
     BLACK = (  0,   0,   0)
     GOLD = (255, 215,   0)
     HIGH = (160, 190, 255)
+    CREAM = (240, 217, 181)
+    BROWN = (181, 136,  99)
+    PIECE_BLACK = ( 30,  30,  30)
 
 class Directions:
     ##DIRECTIONS##

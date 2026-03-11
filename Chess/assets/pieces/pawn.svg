@@ -1,11 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
-  <!-- Head -->
-  <circle cx="40" cy="19" r="13" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Neck: smooth hourglass curves outward toward the base -->
-  <path d="M 35 31 Q 27 44 22 55 L 58 55 Q 53 44 45 31 Z"
-        fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Collar -->
-  <rect x="18" y="55" width="44" height="5" rx="2" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Base -->
-  <rect x="12" y="58" width="56" height="14" rx="5" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!--
+    Single continuous path: round head → pinched waist → wider body → flared base.
+    Right side: head curves out to x=59 at y=23, narrows to x=47 at waist (y=40),
+                widens to x=57 at body base (y=62), flares to x=64 at base (y=67).
+    Left side mirrors. No separate shapes = no gaps.
+  -->
+  <path d="M 40 5
+           C 53 5 59 14 59 23
+           C 59 31 55 37 47 40
+           C 56 45 59 55 57 62
+           L 64 67 L 64 75 L 16 75 L 16 67 L 23 62
+           C 21 55 24 45 33 40
+           C 25 37 21 31 21 23
+           C 21 14 27 5 40 5 Z"
+        fill="{fill}" stroke="{stroke}" stroke-width="2.5"/>
 </svg>

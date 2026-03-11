@@ -1,18 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
   <!--
-    Mitre body: straight-sided trapezoid (narrow at top, wider at bottom).
-    Straight sides mean the pointed shape is clear — bezier curves were
-    rounding this into an egg shape.
-    Ball finial drawn last so it cleanly caps the top.
+    Bishop mitre built as a wide diamond/oval (pointed top, flat bottom)
+    rather than a narrow cone.  The wide middle makes it clearly different
+    from the pawn, and the pointed top reads as a mitre hat.
+
+    Draw order: body polygon → band line → collar → base → ball (on top)
   -->
-  <polygon points="34,16 46,16 52,54 28,54"
+
+  <!-- Mitre body: 9-point oval, pointed at top, wide at shoulder, flat at base -->
+  <polygon points="40,14 52,20 58,34 54,48 46,56 34,56 26,48 22,34 28,20"
            fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Horizontal band (traditional bishop slash) -->
-  <line x1="28" y1="34" x2="52" y2="34" stroke="{stroke}" stroke-width="2.5"/>
+
+  <!-- Horizontal band across the shoulder — traditional bishop mark -->
+  <line x1="22" y1="34" x2="58" y2="34" stroke="{stroke}" stroke-width="3"/>
+
   <!-- Collar -->
-  <rect x="16" y="53" width="48" height="6"  rx="2" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <rect x="16" y="55" width="48" height="6"  rx="2"
+        fill="{fill}" stroke="{stroke}" stroke-width="2"/>
   <!-- Base -->
-  <rect x="8"  y="58" width="64" height="16" rx="4" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Ball finial: drawn last, sits cleanly on top of the mitre -->
-  <circle cx="40" cy="10" r="8" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <rect x="8"  y="60" width="64" height="16" rx="4"
+        fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+
+  <!-- Ball finial: drawn last so it sits cleanly on the pointed top -->
+  <circle cx="40" cy="10" r="9"
+          fill="{fill}" stroke="{stroke}" stroke-width="2"/>
 </svg>

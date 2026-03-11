@@ -1,19 +1,37 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
   <!--
-    Horse head profile facing right, drawn as a polygon so every feature
-    (ear spike, snout protrusion, neck taper) shows as a clear angular vertex
-    rather than being smoothed away by bezier curves.
+    Knight built from distinct recognisable parts rather than one polygon:
 
-    Clockwise from bottom-left:
-      up left neck → back of head → ear V-shape peak at (38,2) →
-      face sweeps right → snout tip at (68,42) → chin back left → base
+    Draw order (back to front):
+      snout rect → neck rect → ear triangle → head circle → eye dot
+
+    The head circle, drawn last, covers the inner portions of the snout and neck,
+    leaving only the protruding tip of the snout and the lower neck visible.
   -->
-  <polygon points="14,64 14,46 20,36 24,26 28,16 34,8 38,2 44,10 50,16 58,22 66,32 68,42 62,52 54,60 50,64"
+
+  <!-- Snout: rectangle protrudes right of the head -->
+  <rect x="50" y="14" width="20" height="16" rx="3"
+        fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+
+  <!-- Neck: narrow column below the head -->
+  <rect x="30" y="36" width="18" height="26"
+        fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+
+  <!-- Ear: triangle above the head -->
+  <polygon points="28,16 40,2 52,16"
            fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+
+  <!-- Head circle — drawn on top, covers inner neck/ear/snout edges -->
+  <circle cx="40" cy="26" r="20"
+          fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+
+  <!-- Eye: dark dot on the face, near the snout -->
+  <circle cx="52" cy="20" r="3.5" fill="{stroke}"/>
+
   <!-- Collar -->
-  <rect x="10" y="63" width="60" height="6"  rx="2" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <rect x="10" y="61" width="60" height="6"  rx="2"
+        fill="{fill}" stroke="{stroke}" stroke-width="2"/>
   <!-- Base -->
-  <rect x="6"  y="68" width="68" height="10" rx="4" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Eye: contrast-colour dot on the face -->
-  <circle cx="56" cy="26" r="4" fill="{stroke}"/>
+  <rect x="6"  y="66" width="68" height="10" rx="4"
+        fill="{fill}" stroke="{stroke}" stroke-width="2"/>
 </svg>

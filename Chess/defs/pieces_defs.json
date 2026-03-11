@@ -1,23 +1,83 @@
 {
-  "knight": {
-    "deltas": [[2,1],[1,2],[-1,2],[-2,1],[-1,-2],[-2,-1],[1,-2],[2,-1]]
-  },
   "pawn": {
-    "deltas": [[0,1]],
-    "first_move": {
-      "deltas": [[0,1],[0,2]]
-    }
+    "icon": "assets/pieces/pawn.svg",
+    "move_rules": [
+      {
+        "deltas": [[0, 1]],
+        "directional": true,
+        "move_only": true,
+        "first_move_extra_steps": 1,
+        "first_move_start_rows_from_back": 1
+      },
+      {
+        "deltas": [[-1, 1], [1, 1]],
+        "directional": true,
+        "capture_only": true
+      }
+    ]
   },
-  "king": {
-    "deltas": [[0,1],[1,0],[0,-1],[-1,0],[1,1],[1,-1],[-1,-1],[1,-1]]
+  "knight": {
+    "icon": "assets/pieces/knight.svg",
+    "move_rules": [
+      {
+        "deltas": [[2,1],[1,2],[-1,2],[-2,1],[-1,-2],[-2,-1],[1,-2],[2,-1]]
+      }
+    ]
   },
   "bishop": {
-    "deltas": ["diagonal"]
+    "icon": "assets/pieces/bishop.svg",
+    "move_rules": [
+      {"deltas": ["diagonal"], "sliding": true}
+    ]
   },
-  "castle": {
-    "deltas": ["straight"]
+  "rook": {
+    "icon": "assets/pieces/rook.svg",
+    "move_rules": [
+      {"deltas": ["straight"], "sliding": true}
+    ]
   },
   "queen": {
-    "deltas": ["diagonal","straight"]
+    "icon": "assets/pieces/queen.svg",
+    "move_rules": [
+      {"deltas": ["diagonal", "straight"], "sliding": true}
+    ]
+  },
+  "king": {
+    "icon": "assets/pieces/king.svg",
+    "move_rules": [
+      {
+        "deltas": [[0,1],[1,0],[0,-1],[-1,0],[1,1],[1,-1],[-1,-1],[-1,1]]
+      }
+    ]
+  },
+  "checkers_man": {
+    "icon": "assets/pieces/checkers_man.svg",
+    "move_rules": [
+      {
+        "deltas": [[-1, 1], [1, 1]],
+        "directional": true,
+        "move_only": true
+      },
+      {
+        "deltas": [[-1, 1], [1, 1]],
+        "directional": true,
+        "capture_only": true,
+        "jump_capture": true
+      }
+    ]
+  },
+  "checkers_king": {
+    "icon": "assets/pieces/checkers_king.svg",
+    "move_rules": [
+      {
+        "deltas": [[-1, 1], [1, 1], [-1, -1], [1, -1]],
+        "move_only": true
+      },
+      {
+        "deltas": [[-1, 1], [1, 1], [-1, -1], [1, -1]],
+        "capture_only": true,
+        "jump_capture": true
+      }
+    ]
   }
 }

@@ -1,17 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
   <!--
-    Single continuous path: round head → pinched waist → wider body → flared base.
-    Right side: head curves out to x=59 at y=23, narrows to x=47 at waist (y=40),
-                widens to x=57 at body base (y=62), flares to x=64 at base (y=67).
-    Left side mirrors. No separate shapes = no gaps.
+    Body is a hexagon that narrows to a waist at y=40, then widens.
+    Top points (y=20) sit inside the head circle so the circle covers them cleanly.
+    Circle drawn last so it sits on top and provides a perfect round head.
   -->
-  <path d="M 40 5
-           C 53 5 59 14 59 23
-           C 59 31 55 37 47 40
-           C 56 45 59 55 57 62
-           L 64 67 L 64 75 L 16 75 L 16 67 L 23 62
-           C 21 55 24 45 33 40
-           C 25 37 21 31 21 23
-           C 21 14 27 5 40 5 Z"
-        fill="{fill}" stroke="{stroke}" stroke-width="2.5"/>
+  <polygon points="33,20 47,20 43,40 54,60 26,60 37,40"
+           fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Collar -->
+  <rect x="14" y="59" width="52" height="6"  rx="2" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Base -->
+  <rect x="8"  y="64" width="64" height="13" rx="4" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Head: drawn last so it cleanly covers the polygon top edge -->
+  <circle cx="40" cy="20" r="16" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
 </svg>

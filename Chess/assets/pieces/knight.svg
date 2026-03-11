@@ -1,25 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
   <!--
-    Horse head profile facing right.
-    Outline (clockwise from bottom-left):
-      up left side of neck → back of head → ear spike at (38,3) →
-      front of ear → nose bridge sweeps right → muzzle bulges to x≈68 →
-      chin curves back left → bottom closes across to start.
+    Horse head profile facing right, drawn as a polygon so every feature
+    (ear spike, snout protrusion, neck taper) shows as a clear angular vertex
+    rather than being smoothed away by bezier curves.
+
+    Clockwise from bottom-left:
+      up left neck → back of head → ear V-shape peak at (38,2) →
+      face sweeps right → snout tip at (68,42) → chin back left → base
   -->
-  <path d="M 14 62
-           L 14 42
-           C 14 30 18 22 26 16
-           L 30 10 L 38 3 L 47 11
-           C 54 13 62 20 66 30
-           C 70 38 68 48 62 54
-           C 58 58 52 62 48 62 Z"
-        fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <polygon points="14,64 14,46 20,36 24,26 28,16 34,8 38,2 44,10 50,16 58,22 66,32 68,42 62,52 54,60 50,64"
+           fill="{fill}" stroke="{stroke}" stroke-width="2"/>
   <!-- Collar -->
-  <rect x="12" y="61" width="58" height="6" rx="2" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <rect x="10" y="63" width="60" height="6"  rx="2" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
   <!-- Base -->
-  <rect x="8"  y="66" width="64" height="10" rx="4" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Eye: solid dot in contrast colour on the nose-bridge area -->
-  <circle cx="56" cy="25" r="4" fill="{stroke}"/>
-  <!-- Nostril: small dot on muzzle -->
-  <circle cx="64" cy="42" r="2.5" fill="{stroke}"/>
+  <rect x="6"  y="68" width="68" height="10" rx="4" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Eye: contrast-colour dot on the face -->
+  <circle cx="56" cy="26" r="4" fill="{stroke}"/>
 </svg>

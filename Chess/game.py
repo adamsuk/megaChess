@@ -87,7 +87,7 @@ class Game:
             pawn = self.board.matrix[px][py].occupant
             color_key = 'white' if pawn and pawn.color == Colours.WHITE else 'black'
             self.graphics.draw_promotion_picker(color_key)
-            pygame.display.update()
+        pygame.display.update()
 
     def terminate_game(self):
         """Quits the program and ends the game."""
@@ -207,7 +207,7 @@ class Graphics:
         if self.timed_message_surface and pygame.time.get_ticks() < self.timed_message_until:
             self.screen.blit(self.timed_message_surface, self.timed_message_rect)
 
-        pygame.display.update()
+        # pygame.display.update() is called by Game.update() after any overlays are drawn
         self.clock.tick(self.fps)
 
     def draw_board_squares(self, board):

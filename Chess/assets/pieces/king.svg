@@ -1,7 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
-  <rect x="36" y="6"  width="8"  height="24" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <rect x="30" y="12" width="20" height="8"  fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <rect x="32" y="28" width="16" height="10" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <polygon points="26,34 54,34 54,62 26,62" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <rect x="22" y="60" width="36" height="10" rx="4" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+  <!--
+    King: prominent cross on top, tapering crown body below.
+    Cross vertical overlaps body top by 2 px to ensure no gap.
+  -->
+  <!-- Cross: vertical bar -->
+  <rect x="35" y="4"  width="10" height="28" rx="2" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Cross: horizontal bar -->
+  <rect x="23" y="12" width="34" height="10" rx="2" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Crown body: trapezoid wider at bottom, overlaps cross bottom by 2 px -->
+  <polygon points="20,30 60,30 66,56 14,56" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Collar -->
+  <rect x="12" y="55" width="56" height="6"  rx="2" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Base -->
+  <rect x="8"  y="60" width="64" height="14" rx="4" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
 </svg>

@@ -1,5 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
-  <circle cx="40" cy="20" r="12" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <polygon points="24,66 56,66 50,38 30,38" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <rect x="20" y="63" width="40" height="9" rx="4" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+  <!--
+    Body is a hexagon that narrows to a waist at y=40, then widens.
+    Top points (y=20) sit inside the head circle so the circle covers them cleanly.
+    Circle drawn last so it sits on top and provides a perfect round head.
+  -->
+  <polygon points="33,20 47,20 43,40 54,60 26,60 37,40"
+           fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Collar -->
+  <rect x="14" y="59" width="52" height="6"  rx="2" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Base -->
+  <rect x="8"  y="64" width="64" height="13" rx="4" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Head: drawn last so it cleanly covers the polygon top edge -->
+  <circle cx="40" cy="20" r="16" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
 </svg>

@@ -56,13 +56,24 @@ class Game:
             self.click = event.type == locals.MOUSEBUTTONDOWN
 
             if self.click:
-                if self.board.location(self.mouse_pos).occupant != None and self.board.location(
+                # Promotion picker takes priority over all other input
+                if self.board.promotion_pending:
+                    choice = self.graphics.promotion_pick(self.mouse_pos)
+                    if choice:
+                        px, py = self.board.promotion_pending
+                        self.board.matrix[px][py].occupant.piece_type = choice
+                        self.board.promotion_pending = None
+                        self.end_turn()
+
+                elif self.board.location(self.mouse_pos).occupant != None and self.board.location(
                         self.mouse_pos).occupant.color == self.turn:
                     self.selected_piece = self.mouse_pos
 
                 elif self.selected_piece != None and self.mouse_pos in self.win_condition.safe_moves(self.board, self.selected_piece):
                     self.board.move_piece(self.selected_piece, self.mouse_pos)
-                    self.end_turn()
+                    # If the move triggered promotion, wait for picker before ending turn
+                    if not self.board.promotion_pending:
+                        self.end_turn()
 
     def update(self):
         """Calls on the graphics class to update the game display."""
@@ -71,6 +82,12 @@ class Game:
                                      self.selected_piece,
                                      self.mouse_pos,
                                      self.click)
+        if self.board.promotion_pending:
+            px, py = self.board.promotion_pending
+            pawn = self.board.matrix[px][py].occupant
+            color_key = 'white' if pawn and pawn.color == Colours.WHITE else 'black'
+            self.graphics.draw_promotion_picker(color_key)
+            pygame.display.update()
 
     def terminate_game(self):
         """Quits the program and ends the game."""
@@ -279,6 +296,52 @@ class Graphics:
         self.timed_message_rect = self.timed_message_surface.get_rect()
         self.timed_message_rect.center = (self.window_size // 2, self.square_size // 2)
         self.timed_message_until = pygame.time.get_ticks() + duration_ms
+
+    # Board columns used for the promotion picker (centred on the board)
+    PROMOTION_PIECES = ['queen', 'rook', 'bishop', 'knight']
+    PROMOTION_COLS   = [2, 3, 4, 5]   # x indices; row is always 3 (middle)
+    PROMOTION_ROW    = 3
+
+    def draw_promotion_picker(self, color_key):
+        """
+        Draws a centred 4-square overlay letting the player pick a promotion piece.
+        The four choices are queen / rook / bishop / knight.
+        """
+        row = self.PROMOTION_ROW
+        # Dark border behind the four squares
+        border_x = self.PROMOTION_COLS[0] * self.square_size - 4
+        border_y = row * self.square_size - 4
+        border_w = len(self.PROMOTION_COLS) * self.square_size + 8
+        border_h = self.square_size + 8
+        pygame.draw.rect(self.screen, Colours.BLACK,
+                         (border_x, border_y, border_w, border_h), border_radius=6)
+
+        for piece_type, col in zip(self.PROMOTION_PIECES, self.PROMOTION_COLS):
+            sx = col * self.square_size
+            sy = row * self.square_size
+            pygame.draw.rect(self.screen, Colours.HIGH,
+                             (sx, sy, self.square_size, self.square_size))
+            icon = self.piece_icons.get((piece_type, color_key))
+            center = self.pixel_coords((col, row))
+            if icon:
+                self.screen.blit(icon, icon.get_rect(center=center))
+            else:
+                label = piece_type[0].upper()
+                text_surf = self.piece_font.render(label, True, Colours.BLACK)
+                self.screen.blit(text_surf, text_surf.get_rect(center=center))
+
+    def promotion_pick(self, mouse_pos):
+        """
+        Returns the piece type the player clicked in the promotion picker, or None.
+        mouse_pos is in board coordinates (col, row).
+        """
+        mx, my = mouse_pos
+        if my != self.PROMOTION_ROW:
+            return None
+        for piece_type, col in zip(self.PROMOTION_PIECES, self.PROMOTION_COLS):
+            if mx == col:
+                return piece_type
+        return None
 
 
 def main():

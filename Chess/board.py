@@ -18,6 +18,8 @@ pygame.font.init()
 class Board:
 	def __init__(self):
 		self.pieces_defs = AllPieces().pieces_defs
+		self.en_passant_target = None   # square a pawn just skipped over (ep capture destination)
+		self.promotion_pending = None   # (x, y) of pawn awaiting promotion choice
 		self.new_board()
 
 	def draw_board_squares(self):
@@ -37,6 +39,9 @@ class Board:
 
 		# initialize the board squares
 		self.draw_board_squares()
+
+		self.en_passant_target = None
+		self.promotion_pending = None
 
 		# initialize chess pieces in starting positions
 		back_rank = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook']
@@ -94,16 +99,17 @@ class Board:
 		x, y = coord_tuple
 		return self.matrix[int(x)][int(y)]
 
-	def legal_moves(self, coord_tuple, hop=False):
+	def legal_moves(self, coord_tuple):
 		"""
 		Returns a list of legal move locations for the piece at (x,y).
-		Uses ChessMoves to compute per-piece-type chess movement from pieces_defs.json.
+		Uses PieceMoves to compute per-piece-type chess movement from pieces_defs.json,
+		then appends castling and en passant moves.
 		"""
 		x, y = coord_tuple
 		piece = self.matrix[int(x)][int(y)].occupant
 		if piece is None:
 			return []
-		return PieceMoves(
+		moves = PieceMoves(
 			pos=(x, y),
 			piece_type=piece.piece_type,
 			piece_color=piece.color,
@@ -111,13 +117,16 @@ class Board:
 			piece_defs=self.pieces_defs,
 			white_color=Colours.WHITE
 		).legal
+		moves += self._castling_destinations(coord_tuple)
+		moves += self._en_passant_moves(coord_tuple)
+		return moves
 
 	def nearest_square(self, mouse_pos):
 		return self.matrix[int(mouse_pos[1])][int(mouse_pos[0])].coords
 
 	def remove_piece(self, coord_tuple):
 		"""
-		Removes a piece from the board at position (x,y). 
+		Removes a piece from the board at position (x,y).
 		"""
 		x, y = coord_tuple
 		self.matrix[int(x)][int(y)].occupant = None
@@ -125,17 +134,50 @@ class Board:
 	def move_piece(self, start_coord_tuple, end_coord_tuple):
 		"""
 		Move a piece from (start_x, start_y) to (end_x, end_y).
+		Handles special moves: en passant capture, castling rook, en passant target tracking.
 		"""
 		start_x, start_y = start_coord_tuple
 		end_x, end_y = end_coord_tuple
-		self.matrix[end_x][end_y].occupant = self.matrix[start_x][start_y].occupant
-		self.remove_piece((start_x, start_y))
+		piece = self.matrix[start_x][start_y].occupant
+
+		# En passant: pawn moves diagonally to the empty en-passant target square
+		if (piece and piece.piece_type == 'pawn'
+				and start_x != end_x
+				and self.matrix[end_x][end_y].occupant is None):
+			# Remove the bypassed pawn (same column as destination, same row as source)
+			self.matrix[end_x][start_y].occupant = None
+
+		# Castling: king moves 2 squares — also slide the rook
+		if piece and piece.piece_type == 'king' and abs(end_x - start_x) == 2:
+			if end_x > start_x:   # kingside
+				rook_x, rook_dest_x = 7, end_x - 1
+			else:                  # queenside
+				rook_x, rook_dest_x = 0, end_x + 1
+			rook = self.matrix[rook_x][start_y].occupant
+			self.matrix[rook_dest_x][start_y].occupant = rook
+			self.matrix[rook_x][start_y].occupant = None
+			if rook:
+				rook.has_moved = True
+
+		# Perform the move
+		self.matrix[end_x][end_y].occupant = piece
+		self.matrix[start_x][start_y].occupant = None
+
+		# Update en passant target: set when pawn double-pushes, clear otherwise
+		if piece and piece.piece_type == 'pawn' and abs(end_y - start_y) == 2:
+			self.en_passant_target = (end_x, (start_y + end_y) // 2)
+		else:
+			self.en_passant_target = None
+
+		# Mark piece as moved (used for castling eligibility)
+		if piece:
+			piece.has_moved = True
 
 		self.king((end_x, end_y))
 
 	def is_end_square(self, coords):
 		"""
-		Is passed a coordinate tuple (x,y), and returns true or 
+		Is passed a coordinate tuple (x,y), and returns true or
 		false depending on if that square on the board is an end square.
 
 		===DOCTESTS===
@@ -183,11 +225,75 @@ class Board:
 
 	def king(self, coord_tuple):
 		"""
-		Takes in (x,y), the coordinates of square to be considered for kinging.
-		If it meets the criteria, then king() kings the piece in that square and kings it.
+		Called after a piece lands on coord_tuple.
+		If a pawn has reached the opponent's back rank, sets self.promotion_pending
+		so the game loop can prompt the player to choose a promotion piece.
 		"""
 		x, y = coord_tuple
-		pass
+		piece = self.matrix[x][y].occupant
+		if piece is None:
+			return
+		if piece.piece_type == 'pawn':
+			back_rank = 0 if piece.color == Colours.WHITE else 7
+			if y == back_rank:
+				self.promotion_pending = (x, y)
+
+	# ------------------------------------------------------------------
+	# Special move generators
+	# ------------------------------------------------------------------
+
+	def _castling_destinations(self, coord_tuple):
+		"""
+		Returns castling destination squares for the king at coord_tuple.
+		Checks: king hasn't moved, rook hasn't moved, path clear,
+		king not currently in check, king doesn't cross a checked square.
+		The destination square itself is checked by legal_moves_safe().
+		"""
+		x, y = coord_tuple
+		piece = self.matrix[x][y].occupant
+		if piece is None or piece.piece_type != 'king' or piece.has_moved:
+			return []
+		if self.is_in_check(piece.color):
+			return []
+
+		destinations = []
+		# (rook_col, king_destination_col, transit_col)
+		for rook_x, king_dest_x, transit_x in [(7, x + 2, x + 1), (0, x - 2, x - 1)]:
+			if not (0 <= king_dest_x <= 7):
+				continue
+			rook = self.matrix[rook_x][y].occupant
+			if rook is None or rook.piece_type != 'rook' or rook.has_moved:
+				continue
+			# All squares between king and rook must be empty
+			lo, hi = min(x, rook_x) + 1, max(x, rook_x)
+			if any(self.matrix[bx][y].occupant is not None for bx in xrange(lo, hi)):
+				continue
+			# King must not pass through a square that is under attack
+			captured = self._simulate_move((x, y), (transit_x, y))
+			in_check = self.is_in_check(piece.color)
+			self._undo_move((x, y), (transit_x, y), captured)
+			if in_check:
+				continue
+			destinations.append((king_dest_x, y))
+		return destinations
+
+	def _en_passant_moves(self, coord_tuple):
+		"""
+		Returns the en passant capture square for the pawn at coord_tuple, if any.
+		self.en_passant_target is the square the capturing pawn would land on.
+		"""
+		if self.en_passant_target is None:
+			return []
+		x, y = coord_tuple
+		piece = self.matrix[x][y].occupant
+		if piece is None or piece.piece_type != 'pawn':
+			return []
+		ep_x, ep_y = self.en_passant_target
+		# Pawn must be one column away and on the correct rank
+		direction = -1 if piece.color == Colours.WHITE else 1
+		if abs(x - ep_x) == 1 and ep_y == y + direction:
+			return [(ep_x, ep_y)]
+		return []
 
 	# ------------------------------------------------------------------
 	# Check / checkmate helpers
@@ -242,16 +348,32 @@ class Board:
 		"""
 		Like legal_moves(), but filters out moves that would leave the
 		moving player's own king in check.
+		Handles en passant simulation (removes the bypassed pawn temporarily).
 		"""
 		piece = self.location(coord_tuple).occupant
 		if piece is None:
 			return []
 		safe = []
 		for dest in self.legal_moves(coord_tuple):
+			# For en passant, temporarily remove the captured pawn from its real square
+			ep_pos = None
+			ep_piece = None
+			if (piece.piece_type == 'pawn'
+					and dest == self.en_passant_target
+					and self.matrix[dest[0]][dest[1]].occupant is None):
+				ep_pos = (dest[0], coord_tuple[1])
+				ep_piece = self.matrix[ep_pos[0]][ep_pos[1]].occupant
+				self.matrix[ep_pos[0]][ep_pos[1]].occupant = None
+
 			captured = self._simulate_move(coord_tuple, dest)
-			if not self.is_in_check(piece.color):
-				safe.append(dest)
+			in_check = self.is_in_check(piece.color)
 			self._undo_move(coord_tuple, dest, captured)
+
+			if ep_pos:
+				self.matrix[ep_pos[0]][ep_pos[1]].occupant = ep_piece
+
+			if not in_check:
+				safe.append(dest)
 		return safe
 
 class Piece:
@@ -259,6 +381,7 @@ class Piece:
 		self.color = color
 		self.piece_type = piece_type
 		self.king = king
+		self.has_moved = False   # used for castling eligibility
 
 class Square:
 	def __init__(self, color, coords, occupant=None):

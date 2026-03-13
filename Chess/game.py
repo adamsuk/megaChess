@@ -92,7 +92,7 @@ class Game:
     def terminate_game(self):
         """Quits the program and ends the game."""
         pygame.quit()
-        sys.exit
+        sys.exit()
 
     def main(self):
         """"This executes the game and controls its flow."""

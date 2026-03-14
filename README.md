@@ -14,6 +14,29 @@ My eldest started playing chess properly just as agentic started to return promi
 
 It's not so mega at the minute but it's definitely chess, so that's a start.
 
+## Getting started
+
+You'll need Python 3.11+ and [Poetry](https://python-poetry.org/).
+
+On Ubuntu/Debian, install the SDL2 system deps first:
+
+```bash
+sudo apt-get install libsdl2-dev libsdl2-mixer-dev libsdl2-image-dev libsdl2-ttf-dev
+```
+
+Then:
+
+```bash
+poetry install
+poetry run python Chess/game.py
+```
+
+To run the tests:
+
+```bash
+SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy poetry run pytest
+```
+
 ## Here's where things stand:
 
 ✅ Done
@@ -32,10 +55,10 @@ It's not so mega at the minute but it's definitely chess, so that's a start.
 
 - En passant & castling — not modelled
 
-- Tests — target the old PosiblePositions class, broken pandas dependency, PieceMoves is untested
+- Tests — PieceMoves is untested, coverage sits around 40%
 
 ❌ Not Started (the "Mega" vision)
 
 - Runtime board/piece customisation UI
 
--Save/load configurations
+- Save/load configurations

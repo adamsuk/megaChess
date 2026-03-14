@@ -1,0 +1,30 @@
+[project]
+name = "megachess"
+version = "0.1.0"
+description = "megaChess game"
+authors = [
+    {name = "adamsuk"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pygame>=2.6.1",
+]
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=9.0.2"
+pytest-cov = ">=7.0.0"
+
+[tool.pytest.ini_options]
+testpaths = ["Chess/tests"]
+
+[tool.coverage.run]
+source = ["Chess"]
+omit = ["Chess/tests/*"]
+
+[tool.poetry]
+package-mode = false
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

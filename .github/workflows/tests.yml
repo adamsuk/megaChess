@@ -40,7 +40,7 @@ jobs:
           SDL_VIDEODRIVER: dummy
           SDL_AUDIODRIVER: dummy
         run: |
-          poetry run pytest Chess/tests/test_chess.py \
+          poetry run pytest Chess/tests/ \
             --cov=Chess \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \

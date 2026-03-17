@@ -1,6 +1,8 @@
 """
 The main game control.
 """
+import json
+import os
 import pygame
 import sys
 from pygame import locals
@@ -8,7 +10,7 @@ from pygame import locals
 from board import Board
 from common import Colours, Directions
 from svg_renderer import render_svg
-from win_conditions import ChessWinCondition
+from win_conditions import ChessWinCondition, CheckersWinCondition
 
 try:
     # Python 2
@@ -53,6 +55,12 @@ class Game:
             if event.type == locals.QUIT:
                 self.terminate_game()
 
+            if event.type == locals.KEYDOWN:
+                if event.key == locals.K_s:
+                    self.save()
+                elif event.key == locals.K_l:
+                    self.load()
+
             self.click = event.type == locals.MOUSEBUTTONDOWN
 
             if self.click:
@@ -88,6 +96,52 @@ class Game:
             color_key = 'white' if pawn and pawn.color == Colours.WHITE else 'black'
             self.graphics.draw_promotion_picker(color_key)
         pygame.display.update()
+
+    # ------------------------------------------------------------------
+    # Save / Load
+    # ------------------------------------------------------------------
+
+    _WIN_CONDITION_KEY = {
+        'chess': ChessWinCondition,
+        'checkers': CheckersWinCondition,
+    }
+    _DEFAULT_SAVE_PATH = os.path.join(os.path.dirname(__file__), 'saves', 'autosave.json')
+
+    def _win_condition_name(self):
+        for name, cls in self._WIN_CONDITION_KEY.items():
+            if isinstance(self.win_condition, cls):
+                return name
+        return 'chess'
+
+    def save(self, path=None):
+        """Save the current game state to a JSON file."""
+        path = path or self._DEFAULT_SAVE_PATH
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        data = {
+            'board': self.board.to_dict(),
+            'turn': 'white' if self.turn == Colours.WHITE else 'black',
+            'win_condition': self._win_condition_name(),
+        }
+        with open(path, 'w') as f:
+            json.dump(data, f, indent=2)
+        self.graphics.draw_timed_message('GAME SAVED', duration_ms=2000)
+
+    def load(self, path=None):
+        """Load a previously saved game state from a JSON file."""
+        path = path or self._DEFAULT_SAVE_PATH
+        if not os.path.exists(path):
+            return
+        with open(path) as f:
+            data = json.load(f)
+        self.board.from_dict(data['board'])
+        self.turn = Colours.WHITE if data.get('turn') == 'white' else Colours.PIECE_BLACK
+        wc_cls = self._WIN_CONDITION_KEY.get(data.get('win_condition', 'chess'), ChessWinCondition)
+        self.win_condition = wc_cls()
+        self.selected_piece = None
+        self.selected_legal_moves = []
+        self.graphics.message = False
+        self.graphics.load_piece_icons(self.board.pieces_defs)
+        self.graphics.draw_timed_message('GAME LOADED', duration_ms=2000)
 
     def terminate_game(self):
         """Quits the program and ends the game."""

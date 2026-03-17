@@ -1,3 +1,4 @@
+import json
 import pygame
 import sys
 from pygame import locals
@@ -375,6 +376,55 @@ class Board:
 			if not in_check:
 				safe.append(dest)
 		return safe
+
+	# ------------------------------------------------------------------
+	# Serialisation
+	# ------------------------------------------------------------------
+
+	_COLOR_TO_STR = None   # populated lazily after Colours is imported
+
+	@classmethod
+	def _color_to_str(cls, color):
+		return 'white' if color == Colours.WHITE else 'black'
+
+	@classmethod
+	def _str_to_color(cls, s):
+		return Colours.WHITE if s == 'white' else Colours.PIECE_BLACK
+
+	def to_dict(self):
+		"""Serialise the full board state to a JSON-compatible dict."""
+		matrix_data = []
+		for x in xrange(8):
+			col = []
+			for y in xrange(8):
+				piece = self.matrix[x][y].occupant
+				if piece is None:
+					col.append(None)
+				else:
+					col.append({
+						'piece_type': piece.piece_type,
+						'color': self._color_to_str(piece.color),
+						'has_moved': piece.has_moved,
+					})
+			matrix_data.append(col)
+		return {
+			'matrix': matrix_data,
+			'en_passant_target': list(self.en_passant_target) if self.en_passant_target else None,
+			'promotion_pending': list(self.promotion_pending) if self.promotion_pending else None,
+		}
+
+	def from_dict(self, d):
+		"""Restore board state from a dict produced by to_dict()."""
+		self.draw_board_squares()
+		self.en_passant_target = tuple(d['en_passant_target']) if d.get('en_passant_target') else None
+		self.promotion_pending = tuple(d['promotion_pending']) if d.get('promotion_pending') else None
+		for x, col in enumerate(d['matrix']):
+			for y, cell in enumerate(col):
+				if cell is not None:
+					p = Piece(self._str_to_color(cell['color']), cell['piece_type'])
+					p.has_moved = cell['has_moved']
+					self.matrix[x][y].occupant = p
+
 
 class Piece:
 	def __init__(self, color, piece_type, king=False):

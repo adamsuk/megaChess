@@ -1,6 +1,8 @@
 """Tests for game.py — Game, Graphics."""
+import json
 import os
 import sys
+import tempfile
 import types
 
 os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
@@ -15,8 +17,8 @@ pygame.display.set_mode((1, 1))
 
 from board import Board, Piece
 from common import Colours
-from win_conditions import ChessWinCondition
-from game import Graphics
+from win_conditions import ChessWinCondition, CheckersWinCondition
+from game import Game, Graphics
 
 W = Colours.WHITE
 B = Colours.PIECE_BLACK
@@ -278,6 +280,137 @@ class TestGameEndTurn(unittest.TestCase):
         kind, msg = game._msgs[0]
         self.assertEqual(kind, 'timed')
         self.assertIn('CHECK', msg)
+
+
+# ---------------------------------------------------------------------------
+# Save / Load
+# ---------------------------------------------------------------------------
+
+def make_real_game():
+    """Full Game instance with a real Board (no display needed)."""
+    game = object.__new__(Game)
+    game.board = Board()
+    game.turn = W
+    game.selected_piece = None
+    game.selected_legal_moves = []
+    game.click = False
+    game.win_condition = ChessWinCondition()
+    msgs = []
+    game.graphics = types.SimpleNamespace(
+        draw_timed_message=lambda m, duration_ms=2000: msgs.append(m),
+        draw_message=lambda m: msgs.append(m),
+        message=False,
+        load_piece_icons=lambda defs: None,
+    )
+    game._msgs = msgs
+    return game
+
+
+class TestSaveLoad(unittest.TestCase):
+
+    def _save_path(self, tmp_dir):
+        return os.path.join(tmp_dir, 'test_save.json')
+
+    def test_save_creates_file(self):
+        game = make_real_game()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._save_path(tmp)
+            game.save(path)
+            self.assertTrue(os.path.exists(path))
+
+    def test_save_file_is_valid_json(self):
+        game = make_real_game()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._save_path(tmp)
+            game.save(path)
+            with open(path) as f:
+                data = json.load(f)
+            self.assertIn('board', data)
+            self.assertIn('turn', data)
+            self.assertIn('win_condition', data)
+
+    def test_save_stores_turn(self):
+        game = make_real_game()
+        game.turn = B
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._save_path(tmp)
+            game.save(path)
+            with open(path) as f:
+                data = json.load(f)
+            self.assertEqual(data['turn'], 'black')
+
+    def test_save_stores_win_condition(self):
+        game = make_real_game()
+        game.win_condition = CheckersWinCondition()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._save_path(tmp)
+            game.save(path)
+            with open(path) as f:
+                data = json.load(f)
+            self.assertEqual(data['win_condition'], 'checkers')
+
+    def test_load_missing_file_no_crash(self):
+        game = make_real_game()
+        original_turn = game.turn
+        game.load('/tmp/megachess_nonexistent_save_xyz.json')
+        self.assertEqual(game.turn, original_turn)
+
+    def test_save_load_roundtrip_fresh_game(self):
+        game = make_real_game()
+        original = game.board.to_dict()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._save_path(tmp)
+            game.save(path)
+            game2 = make_real_game()
+            clear_board(game2.board)
+            game2.load(path)
+            self.assertEqual(game2.board.to_dict(), original)
+            self.assertEqual(game2.turn, W)
+            self.assertIsInstance(game2.win_condition, ChessWinCondition)
+
+    def test_save_load_roundtrip_midgame(self):
+        game = make_real_game()
+        clear_board(game.board)
+        place(game.board, 4, 7, W, 'king')
+        place(game.board, 4, 0, B, 'king')
+        rook = place(game.board, 0, 7, W, 'rook', has_moved=True)
+        game.board.en_passant_target = (3, 5)
+        game.turn = B
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._save_path(tmp)
+            game.save(path)
+            game2 = make_real_game()
+            game2.load(path)
+            self.assertEqual(game2.turn, B)
+            self.assertEqual(game2.board.en_passant_target, (3, 5))
+            restored_rook = game2.board.matrix[0][7].occupant
+            self.assertIsNotNone(restored_rook)
+            self.assertEqual(restored_rook.piece_type, 'rook')
+            self.assertTrue(restored_rook.has_moved)
+
+    def test_save_load_clears_selected_piece(self):
+        game = make_real_game()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._save_path(tmp)
+            game.save(path)
+            game.selected_piece = (4, 4)
+            game.load(path)
+            self.assertIsNone(game.selected_piece)
+
+    def test_save_shows_timed_message(self):
+        game = make_real_game()
+        with tempfile.TemporaryDirectory() as tmp:
+            game.save(self._save_path(tmp))
+        self.assertIn('GAME SAVED', game._msgs)
+
+    def test_load_shows_timed_message(self):
+        game = make_real_game()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._save_path(tmp)
+            game.save(path)
+            game._msgs.clear()
+            game.load(path)
+        self.assertIn('GAME LOADED', game._msgs)
 
 
 if __name__ == '__main__':

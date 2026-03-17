@@ -1,6 +1,7 @@
 """
 The main game control.
 """
+import glob
 import json
 import os
 import pygame
@@ -9,6 +10,7 @@ from pygame import locals
 
 from board import Board
 from common import Colours, Directions
+from pieces import AllPieces
 from svg_renderer import render_svg
 from win_conditions import ChessWinCondition, CheckersWinCondition
 
@@ -19,11 +21,32 @@ except NameError:
     # Python 3, xrange is now named range
     xrange = range
 
+_WIN_CONDITIONS = {
+    'chess': ChessWinCondition,
+    'checkers': CheckersWinCondition,
+}
+
+_LAYOUTS_DIR = os.path.join(os.path.dirname(__file__), 'defs', 'layouts')
+
+
+def _load_layouts():
+    """Return list of layout dicts found in defs/layouts/, sorted by name."""
+    layouts = []
+    for path in sorted(glob.glob(os.path.join(_LAYOUTS_DIR, '*.json'))):
+        try:
+            with open(path) as f:
+                layouts.append(json.load(f))
+        except (OSError, json.JSONDecodeError):
+            pass
+    return layouts
+
+
 class Game:
 
-    def __init__(self):
+    def __init__(self, layout=None):
         """
         The main game control.
+        layout: a layout dict (from defs/layouts/*.json). If None, uses standard chess.
         """
         self.graphics = Graphics()
         self.board = Board()
@@ -34,8 +57,12 @@ class Game:
         self.click = False
         self.pixel_mouse_pos = (0, 0)
 
-        # Swap this to change how the game is won (e.g. CheckersWinCondition()).
-        self.win_condition = ChessWinCondition()
+        if layout is not None:
+            self.board.load_layout(layout)
+            wc_cls = _WIN_CONDITIONS.get(layout.get('win_condition', 'chess'), ChessWinCondition)
+            self.win_condition = wc_cls()
+        else:
+            self.win_condition = ChessWinCondition()
 
     def setup(self):
         """Draws the window and board at the beginning of the game"""
@@ -459,9 +486,129 @@ class Graphics:
         return None
 
 
+class LayoutMenu:
+    """Pre-game layout picker. Shows available layouts and returns the chosen one."""
+
+    BG_COLOR       = (30, 30, 40)
+    TEXT_COLOR     = (220, 220, 220)
+    HIGHLIGHT_BG   = Colours.HIGH
+    HIGHLIGHT_TEXT = (20, 20, 20)
+    TITLE_COLOR    = (255, 215, 0)
+    PADDING        = 20
+    ROW_HEIGHT     = 60
+
+    def __init__(self):
+        pygame.init()
+        info = pygame.display.Info()
+        self.window_size = min(info.current_w, info.current_h)
+        self.screen = pygame.display.set_mode((self.window_size, self.window_size))
+        pygame.display.set_caption('megaChess — choose a layout')
+        self.title_font = pygame.font.Font('freesansbold.ttf', 40)
+        self.item_font  = pygame.font.Font('freesansbold.ttf', 28)
+        self.sub_font   = pygame.font.Font('freesansbold.ttf', 18)
+
+    @property
+    def _play_btn_rect(self):
+        bw, bh = 200, 46
+        return pygame.Rect(
+            (self.window_size - bw) // 2,
+            self.window_size - self.PADDING * 3 - bh,
+            bw, bh,
+        )
+
+    def run(self, layouts):
+        """
+        Block until the player picks a layout. Returns the chosen layout dict.
+        Falls back to the first layout if only one exists.
+        """
+        if not layouts:
+            return None
+        if len(layouts) == 1:
+            return layouts[0]
+
+        clock = pygame.time.Clock()
+        hovered = 0
+
+        while True:
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+
+            for event in pygame.event.get():
+                if event.type == locals.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                if event.type == locals.KEYDOWN:
+                    if event.key == locals.K_UP:
+                        hovered = (hovered - 1) % len(layouts)
+                    elif event.key == locals.K_DOWN:
+                        hovered = (hovered + 1) % len(layouts)
+                    elif event.key in (locals.K_RETURN, locals.K_SPACE):
+                        return layouts[hovered]
+                if event.type == locals.MOUSEBUTTONDOWN:
+                    if self._play_btn_rect.collidepoint(mouse_x, mouse_y):
+                        return layouts[hovered]
+                    for i, rect in enumerate(self._item_rects(len(layouts))):
+                        if rect.collidepoint(mouse_x, mouse_y):
+                            return layouts[i]
+
+            # Update hover from mouse
+            for i, rect in enumerate(self._item_rects(len(layouts))):
+                if rect.collidepoint(mouse_x, mouse_y):
+                    hovered = i
+
+            self._draw(layouts, hovered, (mouse_x, mouse_y))
+            pygame.display.update()
+            clock.tick(60)
+
+    def _item_rects(self, n):
+        top = self.window_size // 4
+        rects = []
+        for i in range(n):
+            rect = pygame.Rect(
+                self.PADDING,
+                top + i * (self.ROW_HEIGHT + 10),
+                self.window_size - self.PADDING * 2,
+                self.ROW_HEIGHT,
+            )
+            rects.append(rect)
+        return rects
+
+    def _draw(self, layouts, hovered, mouse_pos=(0, 0)):
+        self.screen.fill(self.BG_COLOR)
+
+        title = self.title_font.render('megaChess', True, self.TITLE_COLOR)
+        subtitle = self.sub_font.render('Select a layout to start playing', True, self.TEXT_COLOR)
+        self.screen.blit(title,    title.get_rect(centerx=self.window_size // 2, y=self.PADDING))
+        self.screen.blit(subtitle, subtitle.get_rect(centerx=self.window_size // 2, y=self.PADDING + 55))
+
+        for i, (layout, rect) in enumerate(zip(layouts, self._item_rects(len(layouts)))):
+            is_hovered = (i == hovered)
+            bg = self.HIGHLIGHT_BG if is_hovered else (50, 55, 70)
+            pygame.draw.rect(self.screen, bg, rect, border_radius=8)
+            tc = self.HIGHLIGHT_TEXT if is_hovered else self.TEXT_COLOR
+            text = self.item_font.render(layout.get('name', '?'), True, tc)
+            wc = layout.get('win_condition', 'chess')
+            sub  = self.sub_font.render(f'win condition: {wc}', True, tc)
+            self.screen.blit(text, text.get_rect(left=rect.left + 16, centery=rect.centery - 10))
+            self.screen.blit(sub,  sub.get_rect(left=rect.left + 16,  centery=rect.centery + 16))
+
+        # Play button
+        btn = self._play_btn_rect
+        btn_hovered = btn.collidepoint(*mouse_pos)
+        btn_bg = (90, 140, 90) if btn_hovered else (60, 110, 60)
+        pygame.draw.rect(self.screen, btn_bg, btn, border_radius=8)
+        btn_txt = self.item_font.render('▶  Play', True, (220, 240, 220))
+        self.screen.blit(btn_txt, btn_txt.get_rect(center=btn.center))
+
+        hint = self.sub_font.render('↑↓ navigate   Enter / Space / click row or Play button', True, (120, 120, 140))
+        self.screen.blit(hint, hint.get_rect(centerx=self.window_size // 2,
+                                              y=self.window_size - self.PADDING - 20))
+
+
 def main():
-	game = Game()
-	game.main()
+    layouts = _load_layouts()
+    layout = LayoutMenu().run(layouts) if layouts else None
+    game = Game(layout=layout)
+    game.main()
 
 if __name__ == "__main__":
-	main()
+    main()

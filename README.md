@@ -58,6 +58,26 @@ Press **`S`** at any point during a game to save the current board state, whose 
 }
 ```
 
+## Custom layouts
+
+Drop a JSON file into `Chess/defs/layouts/` and it will appear in the layout picker when you start the game.
+
+```json
+{
+  "name": "My Variant",
+  "win_condition": "chess",
+  "pieces_defs": "defs/pieces_defs.json",
+  "starting_position": [
+    {"x": 4, "y": 7, "piece": "king",  "color": "white"},
+    {"x": 4, "y": 0, "piece": "king",  "color": "black"},
+    {"x": 0, "y": 4, "piece": "queen", "color": "white"}
+  ]
+}
+```
+
+`win_condition` is either `"chess"` or `"checkers"`. `pieces_defs` points to the piece rules JSON (relative to `Chess/`). Two layouts ship by default: **Standard Chess** and **Standard Checkers**.
+
+
 ## Here's where things stand:
 
 ✅ Done
@@ -72,12 +92,12 @@ Press **`S`** at any point during a game to save the current board state, whose 
 
 - SVG icons — 8 SVG templates with {fill}/{stroke} placeholders. Colourised at runtime via a pure-Python renderer — no native library dependencies.
 
-- Save / load — press S/L to persist and restore game state to JSON.
+- Save / load — press S/L (or click buttons) to persist and restore game state to JSON.
 
-- Tests — 87% line coverage, 167+ tests across per-module test files.
+- Custom layouts — pre-game picker reads `Chess/defs/layouts/*.json`; ships Standard Chess and Standard Checkers; drop in your own JSON to add a variant.
+
+- Tests — 87% line coverage, 200+ tests across per-module test files.
 
 ❌ Not Started (the "Mega" vision)
-
-- Custom board layouts (pre-game layout picker UI backed by JSON)
 
 - Custom piece rules editor (in-game editor to tweak move_rules and save variants)

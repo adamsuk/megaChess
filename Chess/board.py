@@ -31,26 +31,38 @@ class Board:
 
 	def new_board(self):
 		"""
-		Create a new board matrix.
+		Create a new board matrix in the standard chess starting position.
 		"""
-
-		# initialize squares and place them in matrix
-
 		self.matrix = [[None] * 8 for i in xrange(8)]
-
-		# initialize the board squares
 		self.draw_board_squares()
-
 		self.en_passant_target = None
 		self.promotion_pending = None
 
-		# initialize chess pieces in starting positions
 		back_rank = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook']
 		for x in xrange(8):
 			self.matrix[x][0].occupant = Piece(Colours.PIECE_BLACK, back_rank[x])
 			self.matrix[x][1].occupant = Piece(Colours.PIECE_BLACK, 'pawn')
 			self.matrix[x][6].occupant = Piece(Colours.WHITE, 'pawn')
 			self.matrix[x][7].occupant = Piece(Colours.WHITE, back_rank[x])
+
+	_COLOR_STR_MAP = {'white': Colours.WHITE, 'black': Colours.PIECE_BLACK}
+
+	def load_layout(self, layout):
+		"""
+		Set up the board from a layout dict (as loaded from a layouts JSON file).
+		Clears all pieces then places each entry in layout['starting_position'].
+		Also stores the win_condition key so Game.setup() can apply it.
+		"""
+		self.matrix = [[None] * 8 for i in xrange(8)]
+		self.draw_board_squares()
+		self.en_passant_target = None
+		self.promotion_pending = None
+		self.win_condition_key = layout.get('win_condition', 'chess')
+		self.pieces_defs_path = layout.get('pieces_defs', 'defs/pieces_defs.json')
+		for entry in layout.get('starting_position', []):
+			x, y = entry['x'], entry['y']
+			color = self._COLOR_STR_MAP.get(entry['color'], Colours.WHITE)
+			self.matrix[x][y].occupant = Piece(color, entry['piece'])
 
 
 	def rel(self, dir, coord_tuple):

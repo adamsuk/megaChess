@@ -543,5 +543,73 @@ class TestBoardSerialisation(unittest.TestCase):
         self.assertIsNotNone(board2.matrix[0][0].occupant)
 
 
+# ---------------------------------------------------------------------------
+# Board.load_layout
+# ---------------------------------------------------------------------------
+
+class TestLoadLayout(unittest.TestCase):
+
+    def setUp(self):
+        self.board = Board()
+
+    def _simple_layout(self, win_condition='chess'):
+        return {
+            'name': 'Test',
+            'win_condition': win_condition,
+            'pieces_defs': 'defs/pieces_defs.json',
+            'starting_position': [
+                {'x': 3, 'y': 3, 'piece': 'queen', 'color': 'white'},
+                {'x': 5, 'y': 5, 'piece': 'rook',  'color': 'black'},
+            ],
+        }
+
+    def test_places_pieces_at_correct_coords(self):
+        self.board.load_layout(self._simple_layout())
+        self.assertEqual(self.board.matrix[3][3].occupant.piece_type, 'queen')
+        self.assertEqual(self.board.matrix[5][5].occupant.piece_type, 'rook')
+
+    def test_places_correct_colors(self):
+        self.board.load_layout(self._simple_layout())
+        self.assertEqual(self.board.matrix[3][3].occupant.color, W)
+        self.assertEqual(self.board.matrix[5][5].occupant.color, B)
+
+    def test_clears_previous_state(self):
+        # Default board has pieces at x=0,y=0 etc; after loading simple layout they should be gone
+        self.board.load_layout(self._simple_layout())
+        self.assertIsNone(self.board.matrix[0][0].occupant)
+        self.assertIsNone(self.board.matrix[0][7].occupant)
+
+    def test_empty_squares_remain_empty(self):
+        self.board.load_layout(self._simple_layout())
+        self.assertIsNone(self.board.matrix[4][4].occupant)
+
+    def test_stores_win_condition_key(self):
+        self.board.load_layout(self._simple_layout('checkers'))
+        self.assertEqual(self.board.win_condition_key, 'checkers')
+
+    def test_default_win_condition_key_is_chess(self):
+        layout = self._simple_layout()
+        del layout['win_condition']
+        self.board.load_layout(layout)
+        self.assertEqual(self.board.win_condition_key, 'chess')
+
+    def test_resets_en_passant_target(self):
+        self.board.en_passant_target = (4, 5)
+        self.board.load_layout(self._simple_layout())
+        self.assertIsNone(self.board.en_passant_target)
+
+    def test_resets_promotion_pending(self):
+        self.board.promotion_pending = (4, 0)
+        self.board.load_layout(self._simple_layout())
+        self.assertIsNone(self.board.promotion_pending)
+
+    def test_empty_starting_position_clears_board(self):
+        layout = {'name': 'Empty', 'win_condition': 'chess', 'starting_position': []}
+        self.board.load_layout(layout)
+        for x in range(8):
+            for y in range(8):
+                self.assertIsNone(self.board.matrix[x][y].occupant)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

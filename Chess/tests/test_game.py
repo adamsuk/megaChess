@@ -46,10 +46,12 @@ def place(board, x, y, color, piece_type, has_moved=False):
 def make_graphics_stub(square_size=80):
     """Graphics instance with all __init__ state set manually — no display needed."""
     g = object.__new__(Graphics)
-    g.screen = pygame.display.get_surface() or pygame.Surface((640, 640))
     g.square_size = square_size
     g.piece_size = square_size // 2
     g.window_size = square_size * 8
+    g.button_bar_height = 48
+    total_h = g.window_size + g.button_bar_height
+    g.screen = pygame.Surface((g.window_size, total_h), pygame.SRCALPHA)
     g.piece_font = pygame.font.SysFont(None, square_size // 2)
     g.message = False
     g.timed_message_surface = None
@@ -212,6 +214,62 @@ class TestGraphicsDrawing(unittest.TestCase):
     def test_update_display_with_timed_message(self):
         self.g.draw_timed_message('CHECK!', duration_ms=9999)
         self.g.update_display(self.board, [], None, (0, 0), False)
+
+
+# ---------------------------------------------------------------------------
+# Graphics button bar
+# ---------------------------------------------------------------------------
+
+class TestButtonBar(unittest.TestCase):
+
+    def setUp(self):
+        self.g = make_graphics_stub(square_size=80)
+        # window_size = 640, button_bar_height = 48
+
+    def test_save_btn_rect_is_in_bar(self):
+        r = self.g.save_btn_rect
+        self.assertGreaterEqual(r.top, self.g.window_size)
+        self.assertLess(r.top, self.g.window_size + self.g.button_bar_height)
+
+    def test_load_btn_rect_is_in_bar(self):
+        r = self.g.load_btn_rect
+        self.assertGreaterEqual(r.top, self.g.window_size)
+        self.assertLess(r.top, self.g.window_size + self.g.button_bar_height)
+
+    def test_buttons_do_not_overlap(self):
+        self.assertFalse(self.g.save_btn_rect.colliderect(self.g.load_btn_rect))
+
+    def test_save_btn_left_of_load_btn(self):
+        self.assertLess(self.g.save_btn_rect.right, self.g.load_btn_rect.left + 1)
+
+    def test_draw_button_bar_no_error_save_exists(self):
+        self.g.draw_button_bar((0, 0), save_exists=True)
+
+    def test_draw_button_bar_no_error_no_save(self):
+        self.g.draw_button_bar((0, 0), save_exists=False)
+
+    def test_draw_button_bar_hover_save(self):
+        center = self.g.save_btn_rect.center
+        self.g.draw_button_bar(center, save_exists=True)
+
+    def test_draw_button_bar_hover_load_enabled(self):
+        center = self.g.load_btn_rect.center
+        self.g.draw_button_bar(center, save_exists=True)
+
+    def test_draw_button_bar_hover_load_disabled(self):
+        center = self.g.load_btn_rect.center
+        self.g.draw_button_bar(center, save_exists=False)
+
+    def test_update_display_draws_bar(self):
+        board = Board()
+        # Should not raise even when save_exists is False
+        self.g.update_display(board, [], None, (4, 4), False,
+                              mouse_px=(0, 0), save_exists=False)
+
+    def test_update_display_with_save_exists(self):
+        board = Board()
+        self.g.update_display(board, [], None, (4, 4), False,
+                              mouse_px=(0, 0), save_exists=True)
 
 
 # ---------------------------------------------------------------------------

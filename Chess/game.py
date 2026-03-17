@@ -32,6 +32,7 @@ class Game:
         self.selected_piece = None  # a board location.
         self.selected_legal_moves = []
         self.click = False
+        self.pixel_mouse_pos = (0, 0)
 
         # Swap this to change how the game is won (e.g. CheckersWinCondition()).
         self.win_condition = ChessWinCondition()
@@ -46,7 +47,8 @@ class Game:
         The event loop. This is where events are triggered
         (like a mouse click) and then effect the game state.
         """
-        self.mouse_pos = self.graphics.board_coords(pygame.mouse.get_pos())  # what square is the mouse in?
+        self.pixel_mouse_pos = pygame.mouse.get_pos()
+        self.mouse_pos = self.graphics.board_coords(self.pixel_mouse_pos)
         if self.selected_piece != None:
             self.selected_legal_moves = self.win_condition.safe_moves(self.board, self.selected_piece)
 
@@ -64,12 +66,22 @@ class Game:
             self.click = event.type == locals.MOUSEBUTTONDOWN
 
             if self.click:
-                # Promotion picker takes priority over all other input
+                px, py = self.pixel_mouse_pos
+
+                # Button bar clicks (below the board)
+                if py >= self.graphics.window_size:
+                    if self.graphics.save_btn_rect.collidepoint(px, py):
+                        self.save()
+                    elif self.graphics.load_btn_rect.collidepoint(px, py):
+                        self.load()
+                    continue
+
+                # Promotion picker takes priority over all other board input
                 if self.board.promotion_pending:
                     choice = self.graphics.promotion_pick(self.mouse_pos)
                     if choice:
-                        px, py = self.board.promotion_pending
-                        self.board.matrix[px][py].occupant.piece_type = choice
+                        ppx, ppy = self.board.promotion_pending
+                        self.board.matrix[ppx][ppy].occupant.piece_type = choice
                         self.board.promotion_pending = None
                         self.end_turn()
 
@@ -85,11 +97,14 @@ class Game:
 
     def update(self):
         """Calls on the graphics class to update the game display."""
+        save_exists = os.path.exists(self._DEFAULT_SAVE_PATH)
         self.graphics.update_display(self.board,
                                      self.selected_legal_moves,
                                      self.selected_piece,
                                      self.mouse_pos,
-                                     self.click)
+                                     self.click,
+                                     mouse_px=self.pixel_mouse_pos,
+                                     save_exists=save_exists)
         if self.board.promotion_pending:
             px, py = self.board.promotion_pending
             pawn = self.board.matrix[px][py].occupant
@@ -187,9 +202,11 @@ class Graphics:
         pygame.init()
         info = pygame.display.Info()
         self.window_size = min(info.current_w, info.current_h)
-        self.screen = pygame.display.set_mode((self.window_size, self.window_size))
-        # self.background = pygame.image.load('resources/board.png')
-        
+        self.button_bar_height = 48
+        self.screen = pygame.display.set_mode(
+            (self.window_size, self.window_size + self.button_bar_height)
+        )
+
         self.square_size = self.window_size // 8
         self.piece_size = self.square_size // 2
         self.piece_font = pygame.font.SysFont(None, self.piece_size)
@@ -243,9 +260,51 @@ class Graphics:
         pygame.init()
         pygame.display.set_caption(self.caption)
 
-    def update_display(self, board, legal_moves, selected_piece, mouse_pos, click):
+    @property
+    def save_btn_rect(self):
+        pad = 8
+        bw = self.window_size // 2 - pad * 2
+        bh = self.button_bar_height - pad * 2
+        return pygame.Rect(pad, self.window_size + pad, bw, bh)
+
+    @property
+    def load_btn_rect(self):
+        pad = 8
+        bw = self.window_size // 2 - pad * 2
+        bh = self.button_bar_height - pad * 2
+        return pygame.Rect(self.window_size // 2 + pad, self.window_size + pad, bw, bh)
+
+    def draw_button_bar(self, mouse_px, save_exists):
+        """Draw the Save / Load button strip below the board."""
+        bar_rect = pygame.Rect(0, self.window_size, self.window_size, self.button_bar_height)
+        pygame.draw.rect(self.screen, (30, 32, 42), bar_rect)
+
+        font = pygame.font.Font('freesansbold.ttf', 18)
+
+        for label, rect, enabled in [
+            ('Save  [S]', self.save_btn_rect, True),
+            ('Load  [L]', self.load_btn_rect, save_exists),
+        ]:
+            hovered = rect.collidepoint(*mouse_px) and enabled
+            if not enabled:
+                bg = (45, 48, 58)
+                tc = (80, 85, 95)
+            elif hovered:
+                bg = (90, 120, 170)
+                tc = (240, 245, 255)
+            else:
+                bg = (55, 70, 100)
+                tc = (190, 205, 230)
+            pygame.draw.rect(self.screen, bg, rect, border_radius=6)
+            txt = font.render(label, True, tc)
+            self.screen.blit(txt, txt.get_rect(center=rect.center))
+
+    def update_display(self, board, legal_moves, selected_piece, mouse_pos, click,
+                       mouse_px=(0, 0), save_exists=False):
         """
         This updates the current display.
+        mouse_px: raw pixel mouse position (for button bar hover).
+        save_exists: whether an autosave file is present (enables Load button).
         """
         self.draw_board_squares(board)
         if click:
@@ -260,6 +319,8 @@ class Graphics:
 
         if self.timed_message_surface and pygame.time.get_ticks() < self.timed_message_until:
             self.screen.blit(self.timed_message_surface, self.timed_message_rect)
+
+        self.draw_button_bar(mouse_px, save_exists)
 
         # pygame.display.update() is called by Game.update() after any overlays are drawn
         self.clock.tick(self.fps)

@@ -43,8 +43,8 @@ SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy poetry run pytest
 |---|---|
 | Click a piece | Select it (legal moves highlighted) |
 | Click a highlighted square | Move the selected piece |
-| `S` | Save game to `Chess/saves/autosave.json` |
-| `L` | Load game from `Chess/saves/autosave.json` |
+| `S` or click **Save** button | Save game to `Chess/saves/autosave.json` |
+| `L` or click **Load** button | Load game from `Chess/saves/autosave.json` (greyed out until a save exists) |
 
 ## Save / Load
 

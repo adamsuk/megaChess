@@ -64,6 +64,8 @@ class Game:
                     self.save()
                 elif event.key == locals.K_l:
                     self.load()
+                elif event.key == locals.K_h:
+                    self._toggle_hints()
 
             self.click = event.type == locals.MOUSEBUTTONDOWN
 
@@ -76,6 +78,8 @@ class Game:
                         self.save()
                     elif self.graphics.load_btn_rect.collidepoint(px, py):
                         self.load()
+                    elif self.graphics.hints_btn_rect.collidepoint(px, py):
+                        self._toggle_hints()
                     continue
 
                 # Promotion picker takes priority over all other board input
@@ -160,6 +164,12 @@ class Game:
         self.graphics.load_piece_icons(self.board.pieces_defs)
         self.graphics.draw_timed_message('GAME LOADED', duration_ms=2000)
 
+    def _toggle_hints(self):
+        """Toggle piece selection and legal-move highlighting on/off."""
+        self.graphics.show_hints = not self.graphics.show_hints
+        if not self.graphics.show_hints:
+            self.graphics.highlights = False
+
     def terminate_game(self):
         """Quits the program and ends the game."""
         pygame.quit()
@@ -222,6 +232,7 @@ class Graphics:
         self.piece_icons = {}  # (piece_type, 'white'|'black') -> scaled Surface
 
         self.highlights = False
+        self.show_hints = True   # toggle: show piece selection + legal-move highlighting
 
     # Hex colours used to colorize SVG templates for each side
     ICON_COLOURS = {
@@ -262,35 +273,48 @@ class Graphics:
         pygame.init()
         pygame.display.set_caption(self.caption)
 
+    def _btn_layout(self):
+        """Returns (button_width, button_height, padding) for the 3-button bar."""
+        pad = 8
+        bw = (self.window_size - pad * 4) // 3
+        bh = self.button_bar_height - pad * 2
+        return bw, bh, pad
+
     @property
     def save_btn_rect(self):
-        pad = 8
-        bw = self.window_size // 2 - pad * 2
-        bh = self.button_bar_height - pad * 2
+        bw, bh, pad = self._btn_layout()
         return pygame.Rect(pad, self.window_size + pad, bw, bh)
 
     @property
     def load_btn_rect(self):
-        pad = 8
-        bw = self.window_size // 2 - pad * 2
-        bh = self.button_bar_height - pad * 2
-        return pygame.Rect(self.window_size // 2 + pad, self.window_size + pad, bw, bh)
+        bw, bh, pad = self._btn_layout()
+        return pygame.Rect(pad * 2 + bw, self.window_size + pad, bw, bh)
 
-    def draw_button_bar(self, mouse_px, save_exists):
-        """Draw the Save / Load button strip below the board."""
+    @property
+    def hints_btn_rect(self):
+        bw, bh, pad = self._btn_layout()
+        return pygame.Rect(pad * 3 + bw * 2, self.window_size + pad, bw, bh)
+
+    def draw_button_bar(self, mouse_px, save_exists, show_hints=True):
+        """Draw the Save / Load / Hints button strip below the board."""
         bar_rect = pygame.Rect(0, self.window_size, self.window_size, self.button_bar_height)
         pygame.draw.rect(self.screen, (30, 32, 42), bar_rect)
 
         font = pygame.font.Font('freesansbold.ttf', 18)
 
-        for label, rect, enabled in [
-            ('Save  [S]', self.save_btn_rect, True),
-            ('Load  [L]', self.load_btn_rect, save_exists),
+        for label, rect, enabled, toggled in [
+            ('Save  [S]',  self.save_btn_rect,  True,       True),
+            ('Load  [L]',  self.load_btn_rect,  save_exists, True),
+            ('Hints  [H]', self.hints_btn_rect, True,       show_hints),
         ]:
             hovered = rect.collidepoint(*mouse_px) and enabled
             if not enabled:
                 bg = (45, 48, 58)
                 tc = (80, 85, 95)
+            elif not toggled:
+                # Hints-off state: muted red-tinted background
+                bg = (100, 75, 75) if hovered else (70, 52, 52)
+                tc = (200, 175, 175)
             elif hovered:
                 bg = (90, 120, 170)
                 tc = (240, 245, 255)
@@ -309,7 +333,7 @@ class Graphics:
         save_exists: whether an autosave file is present (enables Load button).
         """
         self.draw_board_squares(board)
-        if click:
+        if click and self.show_hints:
             self.highlight_squares(legal_moves, self.pixel_coords(mouse_pos))
         elif not click and self.highlights:
             self.highlights = False
@@ -322,7 +346,7 @@ class Graphics:
         if self.timed_message_surface and pygame.time.get_ticks() < self.timed_message_until:
             self.screen.blit(self.timed_message_surface, self.timed_message_rect)
 
-        self.draw_button_bar(mouse_px, save_exists)
+        self.draw_button_bar(mouse_px, save_exists, self.show_hints)
 
         # pygame.display.update() is called by Game.update() after any overlays are drawn
         self.clock.tick(self.fps)

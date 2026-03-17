@@ -59,6 +59,7 @@ def make_graphics_stub(square_size=80):
     g.timed_message_until = 0
     g.piece_icons = {}
     g.highlights = False
+    g.show_hints = True
     g.caption = 'megaChess'
     g.fps = 60
     g.clock = pygame.time.Clock()
@@ -236,11 +237,21 @@ class TestButtonBar(unittest.TestCase):
         self.assertGreaterEqual(r.top, self.g.window_size)
         self.assertLess(r.top, self.g.window_size + self.g.button_bar_height)
 
-    def test_buttons_do_not_overlap(self):
-        self.assertFalse(self.g.save_btn_rect.colliderect(self.g.load_btn_rect))
+    def test_hints_btn_rect_is_in_bar(self):
+        r = self.g.hints_btn_rect
+        self.assertGreaterEqual(r.top, self.g.window_size)
+        self.assertLess(r.top, self.g.window_size + self.g.button_bar_height)
 
-    def test_save_btn_left_of_load_btn(self):
-        self.assertLess(self.g.save_btn_rect.right, self.g.load_btn_rect.left + 1)
+    def test_three_buttons_do_not_overlap(self):
+        s, lo, h = self.g.save_btn_rect, self.g.load_btn_rect, self.g.hints_btn_rect
+        self.assertFalse(s.colliderect(lo))
+        self.assertFalse(s.colliderect(h))
+        self.assertFalse(lo.colliderect(h))
+
+    def test_button_order_left_to_right(self):
+        s, lo, h = self.g.save_btn_rect, self.g.load_btn_rect, self.g.hints_btn_rect
+        self.assertLess(s.right, lo.left + 1)
+        self.assertLess(lo.right, h.left + 1)
 
     def test_draw_button_bar_no_error_save_exists(self):
         self.g.draw_button_bar((0, 0), save_exists=True)
@@ -260,6 +271,14 @@ class TestButtonBar(unittest.TestCase):
         center = self.g.load_btn_rect.center
         self.g.draw_button_bar(center, save_exists=False)
 
+    def test_draw_button_bar_hints_on(self):
+        center = self.g.hints_btn_rect.center
+        self.g.draw_button_bar(center, save_exists=True, show_hints=True)
+
+    def test_draw_button_bar_hints_off(self):
+        center = self.g.hints_btn_rect.center
+        self.g.draw_button_bar(center, save_exists=True, show_hints=False)
+
     def test_update_display_draws_bar(self):
         board = Board()
         # Should not raise even when save_exists is False
@@ -270,6 +289,25 @@ class TestButtonBar(unittest.TestCase):
         board = Board()
         self.g.update_display(board, [], None, (4, 4), False,
                               mouse_px=(0, 0), save_exists=True)
+
+    def test_show_hints_defaults_true(self):
+        self.assertTrue(self.g.show_hints)
+
+    def test_highlights_suppressed_when_hints_off(self):
+        """When show_hints is False a click must NOT produce highlights."""
+        board = Board()
+        self.g.show_hints = False
+        self.g.update_display(board, [(3, 4)], (4, 4), (4, 4), click=True,
+                              mouse_px=(0, 0), save_exists=False)
+        self.assertFalse(self.g.highlights)
+
+    def test_highlights_active_when_hints_on(self):
+        """When show_hints is True a click DOES produce highlights."""
+        board = Board()
+        self.g.show_hints = True
+        self.g.update_display(board, [(3, 4)], (4, 4), (4, 4), click=True,
+                              mouse_px=(0, 0), save_exists=True)
+        self.assertTrue(self.g.highlights)
 
 
 # ---------------------------------------------------------------------------

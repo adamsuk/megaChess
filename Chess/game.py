@@ -1,6 +1,7 @@
 """
 The main game control.
 """
+import copy
 import json
 import os
 import pygame
@@ -9,6 +10,7 @@ from pygame import locals
 
 from board import Board
 from common import Colours, Directions
+from pieces import AllPieces
 from svg_renderer import render_svg
 from win_conditions import ChessWinCondition, CheckersWinCondition
 
@@ -459,9 +461,343 @@ class Graphics:
         return None
 
 
+_CUSTOM_PIECES_PATH = os.path.join(os.path.dirname(__file__), 'defs', 'custom_pieces.json')
+_DEFAULT_PIECES_PATH = os.path.join(os.path.dirname(__file__), 'defs', 'pieces_defs.json')
+
+# Boolean flags that can be toggled per move_rule
+_RULE_FLAGS = ['sliding', 'directional', 'move_only', 'capture_only', 'jump_capture']
+
+
+class PieceEditor:
+    """
+    In-game piece rules editor.
+    Left panel: list of piece types.
+    Right panel: move_rules for the selected piece with toggleable flags.
+    Bottom buttons: Clone / Reset / Save / Play.
+    """
+
+    BG          = (25, 28, 38)
+    PANEL_BG    = (38, 42, 56)
+    SEL_BG      = Colours.HIGH
+    SEL_TEXT    = (20, 20, 20)
+    TEXT        = (210, 215, 225)
+    DIM_TEXT    = (120, 130, 145)
+    BTN_BG      = (55, 62, 80)
+    BTN_HOV     = (80, 90, 110)
+    BTN_SAVE    = (60, 130, 80)
+    BTN_PLAY    = (60, 100, 160)
+    BTN_RESET   = (140, 70, 60)
+    TITLE_COLOR = Colours.GOLD
+    ON_COLOR    = (80, 190, 100)
+    OFF_COLOR   = (80, 80, 90)
+    PADDING     = 16
+
+    def __init__(self):
+        pygame.init()
+        info = pygame.display.Info()
+        self.w = min(info.current_w, info.current_h)
+        self.h = self.w
+        self.screen = pygame.display.set_mode((self.w, self.h))
+        pygame.display.set_caption('megaChess — piece editor')
+        self.title_font = pygame.font.Font('freesansbold.ttf', 32)
+        self.label_font = pygame.font.Font('freesansbold.ttf', 22)
+        self.small_font = pygame.font.Font('freesansbold.ttf', 16)
+        self.tiny_font  = pygame.font.Font('freesansbold.ttf', 13)
+
+    def run(self):
+        """
+        Show the editor. Returns (pieces_defs, saved_path | None).
+        pieces_defs is the final state; saved_path is set if the user hit Save.
+        """
+        all_pieces = AllPieces()
+        defs = copy.deepcopy(all_pieces.pieces_defs)
+        # Load any previously saved custom defs
+        if os.path.exists(_CUSTOM_PIECES_PATH):
+            try:
+                with open(_CUSTOM_PIECES_PATH) as f:
+                    defs = json.load(f)
+            except (OSError, json.JSONDecodeError):
+                pass
+
+        selected = list(defs.keys())[0]
+        saved_path = None
+        clock = pygame.time.Clock()
+        scroll_y = 0        # scroll offset for right panel
+        status_msg = ''
+        status_until = 0
+
+        while True:
+            mouse = pygame.mouse.get_pos()
+            piece_names = list(defs.keys())
+
+            # Layout geometry
+            left_w  = self.w // 3
+            right_x = left_w + self.PADDING
+            right_w = self.w - right_x - self.PADDING
+            btn_h   = 42
+            btn_y   = self.h - btn_h - self.PADDING
+
+            for event in pygame.event.get():
+                if event.type == locals.QUIT:
+                    pygame.quit()
+                    sys.exit()
+
+                if event.type == locals.KEYDOWN and event.key == locals.K_ESCAPE:
+                    return defs, saved_path
+
+                if event.type == locals.MOUSEBUTTONDOWN:
+                    mx, my = event.pos
+
+                    # Left panel — select piece
+                    if mx < left_w:
+                        item_rects = self._piece_rects(piece_names, left_w)
+                        for name, rect in zip(piece_names, item_rects):
+                            if rect.collidepoint(mx, my):
+                                selected = name
+                                scroll_y = 0
+
+                    # Right panel — toggle rule flags
+                    elif mx >= right_x and my < btn_y:
+                        if selected in defs:
+                            toggle = self._find_toggle(defs[selected], mx, my,
+                                                       right_x, right_w, scroll_y)
+                            if toggle is not None:
+                                rule_idx, flag = toggle
+                                rules = defs[selected]['move_rules']
+                                rules[rule_idx][flag] = not rules[rule_idx].get(flag, False)
+
+                    # Bottom buttons
+                    for label, rect in self._button_rects(btn_y, btn_h).items():
+                        if rect.collidepoint(mx, my):
+                            if label == '← Back':
+                                return defs, saved_path
+                            elif label == 'Clone' and selected:
+                                new_name = selected + '_custom'
+                                if new_name not in defs:
+                                    defs[new_name] = copy.deepcopy(defs[selected])
+                                selected = new_name
+                                status_msg = f'Cloned → {new_name}'
+                                status_until = pygame.time.get_ticks() + 2500
+                            elif label == 'Reset':
+                                defs = copy.deepcopy(AllPieces().pieces_defs)
+                                selected = list(defs.keys())[0]
+                                saved_path = None
+                                status_msg = 'Reset to defaults'
+                                status_until = pygame.time.get_ticks() + 2500
+                            elif label == 'Save':
+                                ap = AllPieces()
+                                ap.pieces_defs = defs
+                                ap.save(_CUSTOM_PIECES_PATH)
+                                saved_path = _CUSTOM_PIECES_PATH
+                                status_msg = 'Saved to defs/custom_pieces.json'
+                                status_until = pygame.time.get_ticks() + 2500
+                            elif label == 'Play':
+                                return defs, saved_path
+
+                if event.type == locals.MOUSEWHEEL:
+                    scroll_y = max(0, scroll_y - event.y * 20)
+
+            self._draw(defs, selected, piece_names, left_w, right_x, right_w,
+                       btn_y, btn_h, mouse, scroll_y,
+                       status_msg if pygame.time.get_ticks() < status_until else '')
+            pygame.display.update()
+            clock.tick(60)
+
+    # ------------------------------------------------------------------
+    # Geometry helpers
+    # ------------------------------------------------------------------
+
+    def _piece_rects(self, names, left_w):
+        top = 60
+        rects = []
+        for i in range(len(names)):
+            rects.append(pygame.Rect(self.PADDING, top + i * 44, left_w - self.PADDING * 2, 38))
+        return rects
+
+    def _button_rects(self, btn_y, btn_h):
+        labels = ['← Back', 'Clone', 'Reset', 'Save', 'Play']
+        total_btn_w = self.w - self.PADDING * 2
+        bw = (total_btn_w - self.PADDING * (len(labels) - 1)) // len(labels)
+        rects = {}
+        for i, label in enumerate(labels):
+            x = self.PADDING + i * (bw + self.PADDING)
+            rects[label] = pygame.Rect(x, btn_y, bw, btn_h)
+        return rects
+
+    def _rule_toggle_rects(self, rule, rule_y, right_x, right_w):
+        """Returns {flag: pygame.Rect} for toggleable boolean flags of a rule."""
+        rects = {}
+        x = right_x
+        tw = 110
+        for flag in _RULE_FLAGS:
+            rect = pygame.Rect(x, rule_y + 24, tw - 4, 20)
+            rects[flag] = rect
+            x += tw
+            if x + tw > right_x + right_w:
+                x = right_x
+                rule_y += 26
+        return rects
+
+    def _find_toggle(self, piece_def, mx, my, right_x, right_w, scroll_y):
+        """Return (rule_idx, flag) if the click lands on a toggle, else None."""
+        y = 60 - scroll_y
+        for i, rule in enumerate(piece_def.get('move_rules', [])):
+            toggle_rects = self._rule_toggle_rects(rule, y, right_x, right_w)
+            for flag, rect in toggle_rects.items():
+                if rect.collidepoint(mx, my):
+                    return (i, flag)
+            y += 80
+        return None
+
+    # ------------------------------------------------------------------
+    # Drawing
+    # ------------------------------------------------------------------
+
+    def _draw(self, defs, selected, piece_names, left_w, right_x, right_w,
+              btn_y, btn_h, mouse, scroll_y, status_msg):
+        self.screen.fill(self.BG)
+
+        # Title
+        title = self.title_font.render('Piece Editor', True, self.TITLE_COLOR)
+        self.screen.blit(title, (self.PADDING, self.PADDING - 4))
+
+        hint = self.tiny_font.render('Esc or ← Back = return to main menu', True, self.DIM_TEXT)
+        self.screen.blit(hint, (self.w - hint.get_width() - self.PADDING, self.PADDING))
+
+        # Left panel background
+        pygame.draw.rect(self.screen, self.PANEL_BG,
+                         (0, 50, left_w, btn_y - 50), border_radius=4)
+
+        for name, rect in zip(piece_names, self._piece_rects(piece_names, left_w)):
+            is_sel = (name == selected)
+            bg = self.SEL_BG if is_sel else (self.BTN_HOV if rect.collidepoint(*mouse) else self.BTN_BG)
+            pygame.draw.rect(self.screen, bg, rect, border_radius=6)
+            tc = self.SEL_TEXT if is_sel else self.TEXT
+            label = self.label_font.render(name, True, tc)
+            self.screen.blit(label, label.get_rect(centery=rect.centery, left=rect.left + 8))
+
+        # Right panel
+        pygame.draw.rect(self.screen, self.PANEL_BG,
+                         (right_x - self.PADDING, 50, right_w + self.PADDING, btn_y - 50),
+                         border_radius=4)
+
+        clip = pygame.Rect(right_x - self.PADDING, 55, right_w + self.PADDING, btn_y - 60)
+        self.screen.set_clip(clip)
+
+        if selected and selected in defs:
+            piece_def = defs[selected]
+            y = 60 - scroll_y
+            hdr = self.label_font.render(f'{selected}  —  move rules', True, self.TEXT)
+            self.screen.blit(hdr, (right_x, y))
+            y += 32
+
+            for i, rule in enumerate(piece_def.get('move_rules', [])):
+                rule_label = self.small_font.render(f'Rule {i + 1}  deltas: {rule.get("deltas", [])}',
+                                                    True, self.DIM_TEXT)
+                self.screen.blit(rule_label, (right_x, y))
+
+                toggle_rects = self._rule_toggle_rects(rule, y, right_x, right_w)
+                for flag, rect in toggle_rects.items():
+                    val = rule.get(flag, False)
+                    bg  = self.ON_COLOR if val else self.OFF_COLOR
+                    pygame.draw.rect(self.screen, bg, rect, border_radius=4)
+                    ft = self.tiny_font.render(flag, True, (10, 10, 10) if val else (160, 165, 175))
+                    self.screen.blit(ft, ft.get_rect(center=rect.center))
+                y += 80
+
+        self.screen.set_clip(None)
+
+        # Buttons
+        btn_colors = {
+            '← Back': (70, 55, 70),
+            'Clone': self.BTN_BG,
+            'Reset': self.BTN_RESET,
+            'Save':  self.BTN_SAVE,
+            'Play':  self.BTN_PLAY,
+        }
+        for label, rect in self._button_rects(btn_y, btn_h).items():
+            hov = rect.collidepoint(*mouse)
+            base = btn_colors[label]
+            bg = tuple(min(c + 25, 255) for c in base) if hov else base
+            pygame.draw.rect(self.screen, bg, rect, border_radius=8)
+            txt = self.label_font.render(label, True, self.TEXT)
+            self.screen.blit(txt, txt.get_rect(center=rect.center))
+
+        # Status message
+        if status_msg:
+            sm = self.small_font.render(status_msg, True, Colours.GOLD)
+            self.screen.blit(sm, (self.PADDING, btn_y - 28))
+
+
+def _start_menu(screen, w, h):
+    """
+    Simple title screen: 'Play' or 'Edit Pieces'. Returns 'play' or 'edit'.
+    """
+    pygame.display.set_caption('megaChess')
+    title_font = pygame.font.Font('freesansbold.ttf', 52)
+    sub_font   = pygame.font.Font('freesansbold.ttf', 20)
+    btn_font   = pygame.font.Font('freesansbold.ttf', 28)
+    clock = pygame.time.Clock()
+    bw, bh = 240, 56
+    btns = {
+        'Play':       pygame.Rect(w // 2 - bw - 16, h * 2 // 3, bw, bh),
+        'Edit Pieces': pygame.Rect(w // 2 + 16,      h * 2 // 3, bw, bh),
+    }
+    btn_colors = {'Play': (60, 110, 170), 'Edit Pieces': (60, 100, 80)}
+
+    while True:
+        mx, my = pygame.mouse.get_pos()
+        for event in pygame.event.get():
+            if event.type == locals.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == locals.MOUSEBUTTONDOWN:
+                for label, rect in btns.items():
+                    if rect.collidepoint(mx, my):
+                        return 'play' if label == 'Play' else 'edit'
+            if event.type == locals.KEYDOWN:
+                if event.key == locals.K_RETURN:
+                    return 'play'
+                if event.key == locals.K_e:
+                    return 'edit'
+
+        screen.fill((25, 28, 38))
+        title = title_font.render('megaChess', True, Colours.GOLD)
+        sub   = sub_font.render('Press Enter to play  •  E to edit pieces', True, (160, 165, 175))
+        screen.blit(title, title.get_rect(centerx=w // 2, y=h // 4))
+        screen.blit(sub,   sub.get_rect(centerx=w // 2,   y=h // 4 + 70))
+
+        for label, rect in btns.items():
+            hov = rect.collidepoint(mx, my)
+            base = btn_colors[label]
+            bg = tuple(min(c + 30, 255) for c in base) if hov else base
+            pygame.draw.rect(screen, bg, rect, border_radius=10)
+            txt = btn_font.render(label, True, (220, 225, 235))
+            screen.blit(txt, txt.get_rect(center=rect.center))
+
+        pygame.display.update()
+        clock.tick(60)
+
+
 def main():
-	game = Game()
-	game.main()
+    pygame.init()
+    info = pygame.display.Info()
+    w = h = min(info.current_w, info.current_h)
+    screen = pygame.display.set_mode((w, h))
+
+    custom_defs = None
+    while True:
+        choice = _start_menu(screen, w, h)
+        if choice == 'edit':
+            defs, saved_path = PieceEditor().run()
+            if saved_path:
+                custom_defs = defs
+        else:
+            game = Game()
+            if custom_defs is not None:
+                game.board.pieces_defs = custom_defs
+            game.main()
+
 
 if __name__ == "__main__":
-	main()
+    main()

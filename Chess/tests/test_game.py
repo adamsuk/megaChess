@@ -471,5 +471,54 @@ class TestSaveLoad(unittest.TestCase):
         self.assertIn('GAME LOADED', game._msgs)
 
 
+# ---------------------------------------------------------------------------
+# PieceEditor._button_rects
+# ---------------------------------------------------------------------------
+
+class TestPieceEditorButtons(unittest.TestCase):
+
+    def _make_editor(self):
+        from game import PieceEditor
+        ed = object.__new__(PieceEditor)
+        ed.w = 640
+        ed.h = 640
+        ed.PADDING = 16
+        return ed
+
+    def test_back_button_present(self):
+        ed = self._make_editor()
+        rects = ed._button_rects(btn_y=590, btn_h=42)
+        self.assertIn('← Back', rects)
+
+    def test_all_expected_labels_present(self):
+        ed = self._make_editor()
+        rects = ed._button_rects(btn_y=590, btn_h=42)
+        for label in ('← Back', 'Clone', 'Reset', 'Save', 'Play'):
+            self.assertIn(label, rects)
+
+    def test_buttons_do_not_overlap(self):
+        ed = self._make_editor()
+        rects = list(ed._button_rects(btn_y=590, btn_h=42).values())
+        for i, r1 in enumerate(rects):
+            for r2 in rects[i + 1:]:
+                self.assertFalse(r1.colliderect(r2))
+
+    def test_back_button_leftmost(self):
+        ed = self._make_editor()
+        rects = ed._button_rects(btn_y=590, btn_h=42)
+        back_left = rects['← Back'].left
+        for label, rect in rects.items():
+            if label != '← Back':
+                self.assertLessEqual(back_left, rect.left)
+
+    def test_play_button_rightmost(self):
+        ed = self._make_editor()
+        rects = ed._button_rects(btn_y=590, btn_h=42)
+        play_right = rects['Play'].right
+        for label, rect in rects.items():
+            if label != 'Play':
+                self.assertGreaterEqual(play_right, rect.right)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

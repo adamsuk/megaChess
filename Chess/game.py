@@ -473,7 +473,7 @@ class PieceEditor:
     In-game piece rules editor.
     Left panel: list of piece types.
     Right panel: move_rules for the selected piece with toggleable flags.
-    Bottom buttons: Clone / Reset / Save / Play.
+    Bottom buttons: ← Back / Clone / Reset / Save / Play.
     """
 
     BG          = (25, 28, 38)
@@ -491,6 +491,18 @@ class PieceEditor:
     ON_COLOR    = (80, 190, 100)
     OFF_COLOR   = (80, 80, 90)
     PADDING     = 16
+
+    # One-line explanations shown as a tooltip when hovering a flag toggle
+    FLAG_DESCRIPTIONS = {
+        'sliding':      'Sliding — keeps moving in this direction until blocked (rook / bishop style)',
+        'directional':  'Directional — delta is NOT mirrored for the other colour (e.g. pawn moves forward only)',
+        'move_only':    'Move only — this pattern lets the piece MOVE but cannot capture on that square',
+        'capture_only': 'Capture only — this pattern is used ONLY to capture, not to move (e.g. pawn diagonal)',
+        'jump_capture': 'Jump capture — jumps over an enemy to land beyond it, capturing it (checkers style)',
+    }
+
+    # How tall each flag toggle button is drawn / hit-tested (px)
+    TOGGLE_H = 26
 
     def __init__(self):
         pygame.init()
@@ -628,19 +640,20 @@ class PieceEditor:
         """Returns {flag: pygame.Rect} for toggleable boolean flags of a rule."""
         rects = {}
         x = right_x
-        tw = 110
+        tw = 116
         for flag in _RULE_FLAGS:
-            rect = pygame.Rect(x, rule_y + 24, tw - 4, 20)
+            rect = pygame.Rect(x, rule_y + 24, tw - 4, self.TOGGLE_H)
             rects[flag] = rect
             x += tw
             if x + tw > right_x + right_w:
                 x = right_x
-                rule_y += 26
+                rule_y += self.TOGGLE_H + 6
         return rects
 
     def _find_toggle(self, piece_def, mx, my, right_x, right_w, scroll_y):
-        """Return (rule_idx, flag) if the click lands on a toggle, else None."""
-        y = 60 - scroll_y
+        """Return (rule_idx, flag) if the click / hover lands on a toggle, else None."""
+        # y must match _draw: header starts at 60-scroll_y, then += 32 before first rule
+        y = 92 - scroll_y
         for i, rule in enumerate(piece_def.get('move_rules', [])):
             toggle_rects = self._rule_toggle_rects(rule, y, right_x, right_w)
             for flag, rect in toggle_rects.items():
@@ -684,6 +697,7 @@ class PieceEditor:
         clip = pygame.Rect(right_x - self.PADDING, 55, right_w + self.PADDING, btn_y - 60)
         self.screen.set_clip(clip)
 
+        hovered_flag = None
         if selected and selected in defs:
             piece_def = defs[selected]
             y = 60 - scroll_y
@@ -699,13 +713,33 @@ class PieceEditor:
                 toggle_rects = self._rule_toggle_rects(rule, y, right_x, right_w)
                 for flag, rect in toggle_rects.items():
                     val = rule.get(flag, False)
-                    bg  = self.ON_COLOR if val else self.OFF_COLOR
+                    is_hov = rect.collidepoint(*mouse)
+                    if is_hov:
+                        hovered_flag = flag
+                    bg = self.ON_COLOR if val else self.OFF_COLOR
+                    if is_hov:
+                        bg = tuple(min(c + 30, 255) for c in bg)
                     pygame.draw.rect(self.screen, bg, rect, border_radius=4)
+                    # White border on hover so it's obvious it's clickable
+                    if is_hov:
+                        pygame.draw.rect(self.screen, (220, 225, 235), rect, width=1, border_radius=4)
                     ft = self.tiny_font.render(flag, True, (10, 10, 10) if val else (160, 165, 175))
                     self.screen.blit(ft, ft.get_rect(center=rect.center))
                 y += 80
 
         self.screen.set_clip(None)
+
+        # Tooltip: description of the currently hovered flag
+        if hovered_flag and hovered_flag in self.FLAG_DESCRIPTIONS:
+            desc = self.FLAG_DESCRIPTIONS[hovered_flag]
+            tip_surf = self.tiny_font.render(desc, True, (220, 225, 235))
+            tip_bg = pygame.Rect(0, 0, tip_surf.get_width() + 12, tip_surf.get_height() + 8)
+            tx = max(right_x, min(mouse[0], self.w - tip_bg.width - 4))
+            ty = min(mouse[1] + 18, btn_y - tip_bg.height - 4)
+            tip_bg.topleft = (tx, ty)
+            pygame.draw.rect(self.screen, (40, 45, 62), tip_bg, border_radius=4)
+            pygame.draw.rect(self.screen, (90, 100, 130), tip_bg, width=1, border_radius=4)
+            self.screen.blit(tip_surf, (tx + 6, ty + 4))
 
         # Buttons
         btn_colors = {

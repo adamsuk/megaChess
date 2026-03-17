@@ -482,7 +482,8 @@ class TestPieceEditorButtons(unittest.TestCase):
         ed = object.__new__(PieceEditor)
         ed.w = 640
         ed.h = 640
-        ed.PADDING = 16
+        ed.PADDING = PieceEditor.PADDING
+        ed.TOGGLE_H = PieceEditor.TOGGLE_H
         return ed
 
     def test_back_button_present(self):
@@ -518,6 +519,38 @@ class TestPieceEditorButtons(unittest.TestCase):
         for label, rect in rects.items():
             if label != 'Play':
                 self.assertGreaterEqual(play_right, rect.right)
+
+    def test_toggle_rects_use_toggle_h(self):
+        from game import PieceEditor, _RULE_FLAGS
+        ed = self._make_editor()
+        rects = ed._rule_toggle_rects({}, rule_y=100, right_x=220, right_w=400)
+        for flag in _RULE_FLAGS:
+            self.assertIn(flag, rects)
+            self.assertEqual(rects[flag].height, PieceEditor.TOGGLE_H)
+
+    def test_find_toggle_y_matches_draw_offset(self):
+        """_find_toggle must use y=92-scroll_y to align with _draw which adds 32 for header."""
+        from game import PieceEditor, _RULE_FLAGS
+        ed = self._make_editor()
+        # Build a minimal piece def with one rule that has all flags
+        rule = {flag: False for flag in _RULE_FLAGS}
+        rule['deltas'] = [[0, 1]]
+        piece_def = {'move_rules': [rule]}
+        # Compute where the first toggle row is drawn in _draw:
+        # y = 60 (initial) + 32 (header) = 92; toggle top = 92 + 24 = 116
+        right_x = 220
+        right_w = 400
+        scroll_y = 0
+        draw_toggle_top = 92 + 24  # = 116
+        # A click at (right_x + 5, draw_toggle_top + 5) must be detected
+        result = ed._find_toggle(piece_def, right_x + 5, draw_toggle_top + 5,
+                                 right_x, right_w, scroll_y)
+        self.assertIsNotNone(result, 'Toggle not detected at drawn position — offset bug!')
+
+    def test_all_flags_have_descriptions(self):
+        from game import PieceEditor, _RULE_FLAGS
+        for flag in _RULE_FLAGS:
+            self.assertIn(flag, PieceEditor.FLAG_DESCRIPTIONS)
 
 
 if __name__ == '__main__':

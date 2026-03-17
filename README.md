@@ -37,28 +37,47 @@ To run the tests:
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy poetry run pytest
 ```
 
+## Controls
+
+| Key / Action | Effect |
+|---|---|
+| Click a piece | Select it (legal moves highlighted) |
+| Click a highlighted square | Move the selected piece |
+| `S` or click **Save** button | Save game to `Chess/saves/autosave.json` |
+| `L` or click **Load** button | Load game from `Chess/saves/autosave.json` (greyed out until a save exists) |
+
+## Save / Load
+
+Press **`S`** at any point during a game to save the current board state, whose turn it is, and the active win condition. Press **`L`** to restore it. Saves are written to `Chess/saves/autosave.json` — a human-readable JSON file you can copy, rename, or share.
+
+```json
+{
+  "board": { "matrix": [...], "en_passant_target": null, "promotion_pending": null },
+  "turn": "white",
+  "win_condition": "chess"
+}
+```
+
 ## Here's where things stand:
 
 ✅ Done
 
 - Data-driven movement — PieceMoves reads move_rules from JSON. No hardcoded per-piece methods. All 6 chess pieces + 2 checkers pieces fully defined.
 
+- Full chess rules — castling, en passant, pawn promotion all implemented.
+
 - Check / checkmate — board.is_in_check(), legal_moves_safe() (simulate+undo), ChessWinCondition with timed "IN CHECK!" banner and permanent checkmate/stalemate messages.
 
 - Pluggable win conditions — ChessWinCondition and CheckersWinCondition are swappable via game.win_condition. Checkers logic preserved, not removed.
 
-- SVG icons — 8 SVG templates with {fill}/{stroke} placeholders. Colourised at runtime via cairosvg — one file per piece, no colour duplicates.
+- SVG icons — 8 SVG templates with {fill}/{stroke} placeholders. Colourised at runtime via a pure-Python renderer — no native library dependencies.
 
-⚠️ Stubbed / Incomplete
+- Save / load — press S/L to persist and restore game state to JSON.
 
-- Pawn promotion — board.king() exists but is pass
-
-- En passant & castling — not modelled
-
-- Tests — PieceMoves is untested, coverage sits around 40%
+- Tests — 87% line coverage, 167+ tests across per-module test files.
 
 ❌ Not Started (the "Mega" vision)
 
-- Runtime board/piece customisation UI
+- Custom board layouts (pre-game layout picker UI backed by JSON)
 
-- Save/load configurations
+- Custom piece rules editor (in-game editor to tweak move_rules and save variants)

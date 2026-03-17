@@ -443,5 +443,105 @@ class TestLegalMovesSafe(unittest.TestCase):
         self.assertNotIn((4, 2), safe)
 
 
+# ---------------------------------------------------------------------------
+# Board serialisation (to_dict / from_dict)
+# ---------------------------------------------------------------------------
+
+class TestBoardSerialisation(unittest.TestCase):
+
+    def setUp(self):
+        self.board = Board()
+
+    def test_to_dict_has_required_keys(self):
+        d = self.board.to_dict()
+        self.assertIn('matrix', d)
+        self.assertIn('en_passant_target', d)
+        self.assertIn('promotion_pending', d)
+
+    def test_to_dict_matrix_dimensions(self):
+        d = self.board.to_dict()
+        self.assertEqual(len(d['matrix']), 8)
+        for col in d['matrix']:
+            self.assertEqual(len(col), 8)
+
+    def test_to_dict_starting_rook(self):
+        d = self.board.to_dict()
+        cell = d['matrix'][0][7]  # white rook a1
+        self.assertIsNotNone(cell)
+        self.assertEqual(cell['piece_type'], 'rook')
+        self.assertEqual(cell['color'], 'white')
+        self.assertFalse(cell['has_moved'])
+
+    def test_to_dict_empty_square_is_none(self):
+        d = self.board.to_dict()
+        self.assertIsNone(d['matrix'][4][4])
+
+    def test_to_dict_en_passant_target(self):
+        self.board.en_passant_target = (3, 5)
+        d = self.board.to_dict()
+        self.assertEqual(d['en_passant_target'], [3, 5])
+
+    def test_to_dict_en_passant_target_none(self):
+        self.board.en_passant_target = None
+        d = self.board.to_dict()
+        self.assertIsNone(d['en_passant_target'])
+
+    def test_roundtrip_fresh_board(self):
+        d = self.board.to_dict()
+        board2 = Board()
+        clear_board(board2)
+        board2.from_dict(d)
+        self.assertEqual(board2.to_dict(), d)
+
+    def test_roundtrip_custom_position(self):
+        clear_board(self.board)
+        place(self.board, 4, 4, W, 'queen')
+        place(self.board, 3, 3, B, 'rook', has_moved=True)
+        self.board.en_passant_target = (5, 2)
+        d = self.board.to_dict()
+        board2 = Board()
+        board2.from_dict(d)
+        self.assertEqual(board2.to_dict(), d)
+        self.assertEqual(board2.board.en_passant_target if hasattr(board2, 'board') else board2.en_passant_target, (5, 2))
+
+    def test_from_dict_restores_has_moved(self):
+        clear_board(self.board)
+        p = place(self.board, 4, 4, W, 'rook', has_moved=True)
+        d = self.board.to_dict()
+        board2 = Board()
+        board2.from_dict(d)
+        self.assertTrue(board2.matrix[4][4].occupant.has_moved)
+
+    def test_from_dict_restores_color(self):
+        d = self.board.to_dict()
+        board2 = Board()
+        board2.from_dict(d)
+        self.assertEqual(board2.matrix[0][0].occupant.color, B)  # black rook
+        self.assertEqual(board2.matrix[0][7].occupant.color, W)  # white rook
+
+    def test_from_dict_restores_en_passant_target(self):
+        self.board.en_passant_target = (4, 5)
+        d = self.board.to_dict()
+        board2 = Board()
+        board2.from_dict(d)
+        self.assertEqual(board2.en_passant_target, (4, 5))
+
+    def test_from_dict_en_passant_none(self):
+        d = self.board.to_dict()
+        board2 = Board()
+        board2.from_dict(d)
+        self.assertIsNone(board2.en_passant_target)
+
+    def test_from_dict_clears_previous_state(self):
+        board2 = Board()
+        place(board2, 4, 4, B, 'queen')
+        clear_board(self.board)
+        place(self.board, 0, 0, W, 'king')
+        d = self.board.to_dict()
+        board2.from_dict(d)
+        self.assertIsNone(board2.matrix[4][4].occupant)
+        self.assertIsNotNone(board2.matrix[0][0].occupant)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

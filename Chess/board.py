@@ -141,10 +141,14 @@ class Board:
 		end_x, end_y = end_coord_tuple
 		piece = self.matrix[start_x][start_y].occupant
 
-		# En passant: pawn moves diagonally to the empty en-passant target square
+		# En passant: pawn moves diagonally to the empty en-passant target square.
+		# Guard: only fire when the destination IS the recorded en_passant_target,
+		# otherwise any custom diagonal pawn move to an empty square would wrongly
+		# remove the piece at (end_x, start_y).
 		if (piece and piece.piece_type == 'pawn'
 				and start_x != end_x
-				and self.matrix[end_x][end_y].occupant is None):
+				and self.matrix[end_x][end_y].occupant is None
+				and self.en_passant_target == (end_x, end_y)):
 			# Remove the bypassed pawn (same column as destination, same row as source)
 			self.matrix[end_x][start_y].occupant = None
 
@@ -164,8 +168,11 @@ class Board:
 		self.matrix[end_x][end_y].occupant = piece
 		self.matrix[start_x][start_y].occupant = None
 
-		# Update en passant target: set when pawn double-pushes, clear otherwise
-		if piece and piece.piece_type == 'pawn' and abs(end_y - start_y) == 2:
+		# Update en passant target: set only on a straight double-push (dx == 0, |dy| == 2).
+		# A diagonal move with |dy| == 2 (custom rule) must NOT create an en-passant target.
+		if (piece and piece.piece_type == 'pawn'
+				and start_x == end_x
+				and abs(end_y - start_y) == 2):
 			self.en_passant_target = (end_x, (start_y + end_y) // 2)
 		else:
 			self.en_passant_target = None

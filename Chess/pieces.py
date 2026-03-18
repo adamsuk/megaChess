@@ -26,6 +26,12 @@ class AllPieces:
         with open(self.pieces_def_loc) as f:
             self.pieces_defs = json.load(f)
 
+    def save(self, path):
+        """Serialise the current pieces_defs dict back to a JSON file."""
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        with open(path, 'w') as f:
+            json.dump(self.pieces_defs, f, indent=2)
+
 
 if __name__ == "__main__":
     allPieces = AllPieces()

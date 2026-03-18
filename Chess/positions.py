@@ -34,7 +34,9 @@ class PieceMoves:
         self._compute()
 
     def _on_board(self, x, y):
-        return 0 <= x <= 7 and 0 <= y <= 7
+        if not (0 <= x <= 7 and 0 <= y <= 7):
+            return False
+        return not self.board[x][y].is_hole
 
     def _occupant(self, x, y):
         return self.board[x][y].occupant

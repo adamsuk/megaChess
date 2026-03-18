@@ -404,14 +404,16 @@ class Board:
 		for x in xrange(8):
 			col = []
 			for y in xrange(8):
-				piece = self.matrix[x][y].occupant
-				if piece is None:
+				sq = self.matrix[x][y]
+				if sq.is_hole:
+					col.append('hole')
+				elif sq.occupant is None:
 					col.append(None)
 				else:
 					col.append({
-						'piece_type': piece.piece_type,
-						'color': self._color_to_str(piece.color),
-						'has_moved': piece.has_moved,
+						'piece_type': sq.occupant.piece_type,
+						'color': self._color_to_str(sq.occupant.color),
+						'has_moved': sq.occupant.has_moved,
 					})
 			matrix_data.append(col)
 		return {
@@ -427,7 +429,10 @@ class Board:
 		self.promotion_pending = tuple(d['promotion_pending']) if d.get('promotion_pending') else None
 		for x, col in enumerate(d['matrix']):
 			for y, cell in enumerate(col):
-				if cell is not None:
+				if cell == 'hole':
+					self.matrix[x][y].is_hole = True
+					self.matrix[x][y].color = Colours.HOLE
+				elif cell is not None:
 					p = Piece(self._str_to_color(cell['color']), cell['piece_type'])
 					p.has_moved = cell['has_moved']
 					self.matrix[x][y].occupant = p
@@ -441,7 +446,8 @@ class Piece:
 		self.has_moved = False   # used for castling eligibility
 
 class Square:
-	def __init__(self, color, coords, occupant=None):
+	def __init__(self, color, coords, occupant=None, is_hole=False):
 		self.color = color # color is either BLACK or WHITE
 		self.occupant = occupant # occupant is a Square object
 		self.coords = coords
+		self.is_hole = is_hole   # True → disabled square (pieces cannot enter)

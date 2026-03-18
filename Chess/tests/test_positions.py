@@ -263,5 +263,95 @@ class TestJumpCapture(unittest.TestCase):
             self.assertTrue(0 <= mx <= 7 and 0 <= my <= 7)
 
 
+# ---------------------------------------------------------------------------
+# Hole squares block moves
+# ---------------------------------------------------------------------------
+
+class TestHoleBlocksMoves(unittest.TestCase):
+
+    def setUp(self):
+        self.board = Board()
+        clear_board(self.board)
+
+    def _moves(self, coord):
+        x, y = coord
+        piece = self.board.matrix[x][y].occupant
+        return PieceMoves(
+            pos=coord,
+            piece_type=piece.piece_type,
+            piece_color=piece.color,
+            board_matrix=self.board.matrix,
+            piece_defs=self.board.pieces_defs,
+            white_color=Colours.WHITE,
+        ).legal
+
+    def test_rook_slide_stops_before_hole(self):
+        """Rook at (3,3) sliding right; hole at (5,3) → cannot reach (5,3) or beyond."""
+        place(self.board, 3, 3, W, 'rook')
+        self.board.matrix[5][3].is_hole = True
+        moves = self._moves((3, 3))
+        # (4,3) is reachable; (5,3) and (6,3) and (7,3) are not
+        self.assertIn((4, 3), moves)
+        self.assertNotIn((5, 3), moves)
+        self.assertNotIn((6, 3), moves)
+        self.assertNotIn((7, 3), moves)
+
+    def test_rook_cannot_land_on_hole(self):
+        """Rook adjacent to a hole cannot land on it."""
+        place(self.board, 3, 3, W, 'rook')
+        self.board.matrix[4][3].is_hole = True
+        moves = self._moves((3, 3))
+        self.assertNotIn((4, 3), moves)
+
+    def test_bishop_slide_stops_before_hole(self):
+        """Bishop sliding diagonally is blocked by a hole."""
+        place(self.board, 3, 3, W, 'bishop')
+        self.board.matrix[5][5].is_hole = True
+        moves = self._moves((3, 3))
+        self.assertIn((4, 4), moves)
+        self.assertNotIn((5, 5), moves)
+        self.assertNotIn((6, 6), moves)
+
+    def test_knight_cannot_jump_to_hole(self):
+        """Knight cannot land on a hole square even with its jump move."""
+        place(self.board, 3, 3, W, 'knight')
+        # A knight at (3,3) can normally reach (4,5)
+        self.board.matrix[4][5].is_hole = True
+        moves = self._moves((3, 3))
+        self.assertNotIn((4, 5), moves)
+
+    def test_king_cannot_step_into_hole(self):
+        """King cannot move to a hole square."""
+        place(self.board, 3, 3, W, 'king')
+        self.board.matrix[4][3].is_hole = True
+        moves = self._moves((3, 3))
+        self.assertNotIn((4, 3), moves)
+
+    def test_pawn_cannot_advance_into_hole(self):
+        """White pawn blocked from moving forward into a hole."""
+        place(self.board, 3, 5, W, 'pawn')
+        self.board.matrix[3][4].is_hole = True
+        moves = self._moves((3, 5))
+        self.assertNotIn((3, 4), moves)
+        self.assertNotIn((3, 3), moves)  # double push also blocked
+
+    def test_queen_blocked_by_hole(self):
+        """Queen's sliding ray is cut off by a hole."""
+        place(self.board, 0, 0, W, 'queen')
+        self.board.matrix[3][0].is_hole = True
+        moves = self._moves((0, 0))
+        self.assertIn((2, 0), moves)
+        self.assertNotIn((3, 0), moves)
+        self.assertNotIn((4, 0), moves)
+
+    def test_non_hole_squares_still_reachable(self):
+        """Holes only block their own square; adjacent non-holes remain reachable."""
+        place(self.board, 3, 3, W, 'rook')
+        self.board.matrix[5][3].is_hole = True
+        moves = self._moves((3, 3))
+        self.assertIn((4, 3), moves)   # one step right — still open
+        self.assertIn((3, 4), moves)   # up direction — unaffected
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

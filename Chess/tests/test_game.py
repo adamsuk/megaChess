@@ -1504,12 +1504,16 @@ class TestBoardLayoutEditorGeometry(unittest.TestCase):
 
     def test_palette_rects_covers_all_combinations(self):
         rects = self.editor._palette_rects()
-        # 2 colours × 6 piece types = 12 entries
-        self.assertEqual(len(rects), 12)
-        colors  = {c for c, _, _ in rects}
-        pieces  = {p for _, p, _ in rects}
+        # 2 colours × 6 piece types + 1 hole tool = 13 entries
+        self.assertEqual(len(rects), 13)
+        piece_rects = [(c, p, r) for c, p, r in rects if c != 'hole']
+        colors  = {c for c, _, _ in piece_rects}
+        pieces  = {p for _, p, _ in piece_rects}
         self.assertEqual(colors, {'white', 'black'})
         self.assertEqual(pieces, set(BoardLayoutEditor.PALETTE_PIECES))
+        # Last entry is the hole tool
+        self.assertEqual(rects[-1][0], 'hole')
+        self.assertEqual(rects[-1][1], 'hole')
 
     def test_button_rects_has_all_buttons(self):
         _, oy = self.editor._board_origin()
@@ -1784,6 +1788,142 @@ class TestBoardLayoutAppliedToBoard(unittest.TestCase):
         for x in range(8):
             for y in range(8):
                 self.assertIsNone(board.matrix[x][y].occupant)
+
+
+class TestBoardLayoutEditorHoles(unittest.TestCase):
+    """Tests for the hole-toggling feature in BoardLayoutEditor."""
+
+    def setUp(self):
+        self.editor = make_layout_editor()
+
+    def _make_event(self, etype, **kwargs):
+        ev = mock.MagicMock()
+        ev.type = etype
+        for k, v in kwargs.items():
+            setattr(ev, k, v)
+        return ev
+
+    def _run_events(self, events, path=None):
+        editor = make_layout_editor()
+        esc = self._make_event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
+        with mock.patch('game._CUSTOM_LAYOUT_PATH', path or '/nonexistent/_layout.json'), \
+             mock.patch('pygame.event.get', side_effect=[events, [esc]]), \
+             mock.patch('pygame.display.update'), \
+             mock.patch.object(editor, '_draw'):
+            return editor.run()
+
+    def _click_board_sq(self, bx, by, button=1):
+        editor = make_layout_editor()
+        sq = editor._board_sq_size()
+        ox, oy = editor._board_origin()
+        px = ox + bx * sq + sq // 2
+        py = oy + by * sq + sq // 2
+        return self._make_event(pygame.MOUSEBUTTONDOWN,
+                                pos=(px, py), button=button)
+
+    def _hole_palette_event(self):
+        """Return a click event targeting the hole palette entry."""
+        editor = make_layout_editor()
+        hole_rect = self.editor._palette_rects()[-1][2]  # last entry = hole
+        return self._make_event(pygame.MOUSEBUTTONDOWN,
+                                pos=hole_rect.center, button=1)
+
+    def test_selecting_hole_then_clicking_board_creates_hole(self):
+        """Select hole tool, click an empty square → 'hole' sentinel placed."""
+        editor = make_layout_editor()
+        sq = editor._board_sq_size()
+        ox, oy = editor._board_origin()
+        hole_rect = editor._palette_rects()[-1][2]
+        px = ox + 3 * sq + sq // 2
+        py = oy + 3 * sq + sq // 2
+        sel_ev = self._make_event(pygame.MOUSEBUTTONDOWN,
+                                  pos=hole_rect.center, button=1)
+        click_ev = self._make_event(pygame.MOUSEBUTTONDOWN,
+                                    pos=(px, py), button=1)
+        esc = self._make_event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
+        with mock.patch('game._CUSTOM_LAYOUT_PATH', '/nonexistent/_layout.json'), \
+             mock.patch('pygame.event.get', side_effect=[[sel_ev, click_ev], [esc]]), \
+             mock.patch('pygame.display.update'), \
+             mock.patch.object(editor, '_draw'):
+            layout, _ = editor.run()
+        self.assertEqual(layout['matrix'][3][3], 'hole')
+
+    def test_clicking_hole_square_again_restores_empty(self):
+        """Clicking a hole square with the hole tool selected toggles it back to None."""
+        editor = make_layout_editor()
+        sq = editor._board_sq_size()
+        ox, oy = editor._board_origin()
+        hole_rect = editor._palette_rects()[-1][2]
+        # Target a clear square in the middle of the board
+        px = ox + 3 * sq + sq // 2
+        py = oy + 3 * sq + sq // 2
+        sel_ev  = self._make_event(pygame.MOUSEBUTTONDOWN, pos=hole_rect.center, button=1)
+        click1  = self._make_event(pygame.MOUSEBUTTONDOWN, pos=(px, py), button=1)
+        click2  = self._make_event(pygame.MOUSEBUTTONDOWN, pos=(px, py), button=1)
+        esc = self._make_event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
+        with mock.patch('game._CUSTOM_LAYOUT_PATH', '/nonexistent/_layout.json'), \
+             mock.patch('pygame.event.get', side_effect=[[sel_ev, click1, click2], [esc]]), \
+             mock.patch('pygame.display.update'), \
+             mock.patch.object(editor, '_draw'):
+            layout, _ = editor.run()
+        self.assertIsNone(layout['matrix'][3][3])
+
+    def test_right_click_clears_hole(self):
+        """Right-clicking a hole square clears it (same as clearing pieces)."""
+        editor = make_layout_editor()
+        sq = editor._board_sq_size()
+        ox, oy = editor._board_origin()
+        hole_rect = editor._palette_rects()[-1][2]
+        px = ox + 4 * sq + sq // 2
+        py = oy + 4 * sq + sq // 2
+        sel_ev = self._make_event(pygame.MOUSEBUTTONDOWN, pos=hole_rect.center, button=1)
+        place_ev  = self._make_event(pygame.MOUSEBUTTONDOWN, pos=(px, py), button=1)
+        clear_ev  = self._make_event(pygame.MOUSEBUTTONDOWN, pos=(px, py), button=3)
+        esc = self._make_event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
+        with mock.patch('game._CUSTOM_LAYOUT_PATH', '/nonexistent/_layout.json'), \
+             mock.patch('pygame.event.get', side_effect=[[sel_ev, place_ev, clear_ev], [esc]]), \
+             mock.patch('pygame.display.update'), \
+             mock.patch.object(editor, '_draw'):
+            layout, _ = editor.run()
+        self.assertIsNone(layout['matrix'][4][4])
+
+    def test_draw_with_holes_in_layout(self):
+        """_draw() renders a layout that contains hole sentinels without error."""
+        layout = self.editor._default_layout()
+        layout['matrix'][3][3] = 'hole'
+        layout['matrix'][5][5] = 'hole'
+        sq = self.editor._board_sq_size()
+        _, oy = self.editor._board_origin()
+        btn_y = oy + sq * 8 + self.editor.PADDING
+        self.editor._draw(layout, 'hole', (0, 0), btn_y, 40, '')
+
+    def test_draw_hole_palette_entry_selected(self):
+        """_draw() with hole tool selected renders hole palette entry highlighted."""
+        layout = self.editor._default_layout()
+        sq = self.editor._board_sq_size()
+        _, oy = self.editor._board_origin()
+        btn_y = oy + sq * 8 + self.editor.PADDING
+        self.editor._draw(layout, 'hole', (0, 0), btn_y, 40, '')
+
+    def test_hole_layout_applied_to_board(self):
+        """A layout dict with 'hole' values loads correctly into Board."""
+        layout = self.editor._default_layout()
+        layout['matrix'][3][3] = 'hole'
+        board = Board()
+        board.from_dict(layout)
+        self.assertTrue(board.matrix[3][3].is_hole)
+        self.assertEqual(board.matrix[3][3].color, Colours.HOLE)
+
+    def test_hole_board_from_dict_round_trip(self):
+        """Board with holes serialises and deserialises holes correctly."""
+        layout = self.editor._default_layout()
+        layout['matrix'][2][2] = 'hole'
+        board = Board()
+        board.from_dict(layout)
+        d = board.to_dict()
+        board2 = Board()
+        board2.from_dict(d)
+        self.assertTrue(board2.matrix[2][2].is_hole)
 
 
 if __name__ == '__main__':

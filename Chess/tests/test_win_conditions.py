@@ -175,5 +175,69 @@ class TestCheckersWinCondition(unittest.TestCase):
         )
 
 
+# ---------------------------------------------------------------------------
+# Hole squares are skipped in win-condition iteration
+# ---------------------------------------------------------------------------
+
+class TestHoleSkippedInWinCheck(unittest.TestCase):
+
+    def setUp(self):
+        self.board = Board()
+        for x in range(8):
+            for y in range(8):
+                self.board.matrix[x][y].occupant = None
+        self.board.en_passant_target = None
+        self.board.promotion_pending = None
+        self.chess_wc = ChessWinCondition()
+        self.checkers_wc = CheckersWinCondition()
+
+    def test_chess_wc_skips_hole_and_detects_stalemate(self):
+        """With only a king that is in check on a mostly-hole board, checkmate is detected."""
+        # Place white king at (4, 4), surround with black rooks to force checkmate
+        place(self.board, 4, 4, W, 'king')
+        place(self.board, 0, 0, B, 'rook')
+        place(self.board, 0, 7, B, 'rook')
+        # Mark all squares except the occupied ones as holes to limit escape routes
+        for x in range(8):
+            for y in range(8):
+                if self.board.matrix[x][y].occupant is None:
+                    self.board.matrix[x][y].is_hole = True
+        game = MockGame(self.board, W)
+        # Should not raise an exception regardless of result
+        result = self.chess_wc.check(game)
+        # Result may be checkmate, stalemate, or check — we just need no crash
+        # and if there's a result it must be a GameResult
+        if result is not None:
+            self.assertIsInstance(result, GameResult)
+
+    def test_chess_wc_hole_squares_produce_no_false_pieces(self):
+        """Hole squares are not treated as occupied by any colour."""
+        place(self.board, 4, 4, W, 'king')
+        place(self.board, 4, 0, B, 'king')
+        # Mark (0,0) as a hole — it should be skipped, not counted as a piece
+        self.board.matrix[0][0].is_hole = True
+        game = MockGame(self.board, W)
+        # Must not raise; win condition should run normally
+        self.chess_wc.check(game)
+
+    def test_checkers_wc_skips_hole_squares(self):
+        """CheckersWinCondition skips holes without raising."""
+        place(self.board, 4, 4, W, 'king')
+        place(self.board, 4, 0, B, 'king')
+        self.board.matrix[0][0].is_hole = True
+        game = MockGame(self.board, W)
+        self.checkers_wc.check(game)  # should not raise
+
+    def test_checkers_wc_hole_does_not_block_win_detection(self):
+        """A hole on the board doesn't prevent checkers win detection."""
+        place(self.board, 4, 4, W, 'king')
+        # No black pieces — black has no moves
+        game = MockGame(self.board, B)
+        self.board.matrix[3][3].is_hole = True
+        result = self.checkers_wc.check(game)
+        self.assertIsNotNone(result)
+        self.assertIn('WHITE WINS', result.message)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -594,5 +594,77 @@ class TestBoardSerialisation(unittest.TestCase):
         self.assertIsNotNone(board2.matrix[0][0].occupant)
 
 
+# ---------------------------------------------------------------------------
+# Hole squares
+# ---------------------------------------------------------------------------
+
+class TestHoleSquares(unittest.TestCase):
+
+    def setUp(self):
+        self.board = Board()
+        clear_board(self.board)
+
+    def test_square_default_is_not_hole(self):
+        self.assertFalse(self.board.matrix[3][3].is_hole)
+
+    def test_to_dict_serialises_hole_as_string(self):
+        self.board.matrix[2][2].is_hole = True
+        d = self.board.to_dict()
+        self.assertEqual(d['matrix'][2][2], 'hole')
+
+    def test_to_dict_empty_square_is_none(self):
+        d = self.board.to_dict()
+        self.assertIsNone(d['matrix'][3][3])
+
+    def test_from_dict_restores_hole_flag(self):
+        self.board.matrix[4][5].is_hole = True
+        d = self.board.to_dict()
+        board2 = Board()
+        board2.from_dict(d)
+        self.assertTrue(board2.matrix[4][5].is_hole)
+
+    def test_from_dict_hole_color_is_hole_colour(self):
+        self.board.matrix[1][1].is_hole = True
+        d = self.board.to_dict()
+        board2 = Board()
+        board2.from_dict(d)
+        self.assertEqual(board2.matrix[1][1].color, Colours.HOLE)
+
+    def test_from_dict_hole_has_no_occupant(self):
+        self.board.matrix[0][0].is_hole = True
+        d = self.board.to_dict()
+        board2 = Board()
+        board2.from_dict(d)
+        self.assertIsNone(board2.matrix[0][0].occupant)
+
+    def test_from_dict_non_hole_squares_unchanged(self):
+        self.board.matrix[3][3].is_hole = True
+        d = self.board.to_dict()
+        board2 = Board()
+        board2.from_dict(d)
+        self.assertFalse(board2.matrix[0][0].is_hole)
+
+    def test_from_dict_backwards_compatible_no_holes(self):
+        """Old JSON without any 'hole' strings loads cleanly."""
+        d = self.board.to_dict()
+        # Confirm no 'hole' entries in default layout dict
+        for col in d['matrix']:
+            for cell in col:
+                self.assertNotEqual(cell, 'hole')
+        board2 = Board()
+        board2.from_dict(d)
+        for x in range(8):
+            for y in range(8):
+                self.assertFalse(board2.matrix[x][y].is_hole)
+
+    def test_hole_square_with_piece_serialises_as_hole(self):
+        """Even if a square somehow has both is_hole and an occupant, hole takes priority."""
+        p = Piece(W, 'rook')
+        self.board.matrix[5][5].occupant = p
+        self.board.matrix[5][5].is_hole = True
+        d = self.board.to_dict()
+        self.assertEqual(d['matrix'][5][5], 'hole')
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

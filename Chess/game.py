@@ -362,12 +362,20 @@ class Graphics:
 
     def draw_board_squares(self, board):
         """
-        Takes a board object and draws all of its squares to the display
+        Takes a board object and draws all of its squares to the display.
+        Hole squares are drawn in HOLE grey with a darker inset for a sunken look.
         """
+        sq = self.square_size
         for x in xrange(8):
             for y in xrange(8):
-                pygame.draw.rect(self.screen, board.matrix[int(x)][int(y)].color,
-                                 (x * self.square_size, y * self.square_size, self.square_size, self.square_size), )
+                sq_obj = board.matrix[int(x)][int(y)]
+                pygame.draw.rect(self.screen, sq_obj.color,
+                                 (x * sq, y * sq, sq, sq))
+                if sq_obj.is_hole:
+                    inset = 3
+                    pygame.draw.rect(self.screen, (45, 45, 55),
+                                     (x * sq + inset, y * sq + inset,
+                                      sq - inset * 2, sq - inset * 2))
 
     def draw_board_pieces(self, board):
         """
@@ -1069,7 +1077,9 @@ class BoardLayoutEditor:
         return None
 
     def _palette_rects(self):
-        """Return list of (color_str, piece_type, pygame.Rect) for the palette."""
+        """Return list of (color_str, piece_type, pygame.Rect) for the palette.
+        The last entry is the hole tool: ('hole', 'hole', rect).
+        """
         px = self._panel_x()
         pw = self.w - px - self.PADDING
         item_h = 30
@@ -1082,6 +1092,9 @@ class BoardLayoutEditor:
                                pygame.Rect(px, y, pw, item_h)))
                 y += item_h + gap
             y += gap * 3  # extra gap between colour sections
+        # Hole tool — separate section at the bottom of the palette
+        y += gap * 2
+        rects.append(('hole', 'hole', pygame.Rect(px, y, pw, item_h)))
         return rects
 
     def _button_rects(self, btn_y, btn_h):
@@ -1132,32 +1145,36 @@ class BoardLayoutEditor:
                 if event.type == locals.MOUSEBUTTONDOWN:
                     mx, my = event.pos
 
-                    # Board click: place or remove a piece
+                    # Board click: place/remove piece or toggle hole
                     sq_coord = self._board_sq_from_pixel(mx, my)
                     if sq_coord is not None:
                         bx, by = sq_coord
                         cell = layout['matrix'][bx][by]
                         if event.button == 3:
-                            # Right-click: always clear
+                            # Right-click: always clear (removes pieces and holes)
                             layout['matrix'][bx][by] = None
                         elif event.button == 1:
-                            color_str, piece_type = selected
-                            if (cell is not None
-                                    and cell['piece_type'] == piece_type
-                                    and cell['color'] == color_str):
-                                # Same piece clicked again → remove
-                                layout['matrix'][bx][by] = None
+                            if selected == 'hole':
+                                # Toggle hole: punch in or restore to empty
+                                layout['matrix'][bx][by] = None if cell == 'hole' else 'hole'
                             else:
-                                layout['matrix'][bx][by] = {
-                                    'piece_type': piece_type,
-                                    'color': color_str,
-                                    'has_moved': False,
-                                }
+                                color_str, piece_type = selected
+                                if (isinstance(cell, dict)
+                                        and cell['piece_type'] == piece_type
+                                        and cell['color'] == color_str):
+                                    # Same piece clicked again → remove
+                                    layout['matrix'][bx][by] = None
+                                else:
+                                    layout['matrix'][bx][by] = {
+                                        'piece_type': piece_type,
+                                        'color': color_str,
+                                        'has_moved': False,
+                                    }
 
                     # Palette click: change selection
                     for color_str, piece_type, rect in self._palette_rects():
                         if rect.collidepoint(mx, my):
-                            selected = (color_str, piece_type)
+                            selected = 'hole' if color_str == 'hole' else (color_str, piece_type)
 
                     # Button clicks
                     for label, rect in self._button_rects(btn_y, btn_h).items():
@@ -1231,12 +1248,21 @@ class BoardLayoutEditor:
         # Board squares
         for x in range(8):
             for y in range(8):
-                color = self.CREAM if (x + y) % 2 == 0 else self.BROWN
+                cell = layout['matrix'][x][y]
+                if cell == 'hole':
+                    base_color = Colours.HOLE
+                else:
+                    base_color = self.CREAM if (x + y) % 2 == 0 else self.BROWN
                 rect = self._board_sq_rect(x, y)
                 sq_coord = self._board_sq_from_pixel(*mouse)
-                if sq_coord == (x, y):
-                    color = tuple(min(c + 30, 255) for c in color)
-                pygame.draw.rect(self.screen, color, rect)
+                if sq_coord == (x, y) and cell != 'hole':
+                    base_color = tuple(min(c + 30, 255) for c in base_color)
+                pygame.draw.rect(self.screen, base_color, rect)
+                if cell == 'hole':
+                    inset = 3
+                    pygame.draw.rect(self.screen, (45, 45, 55),
+                                     pygame.Rect(rect.left + inset, rect.top + inset,
+                                                 rect.w - inset * 2, rect.h - inset * 2))
 
         # Board pieces
         piece_labels = {'pawn': 'P', 'rook': 'R', 'knight': 'N',
@@ -1244,7 +1270,7 @@ class BoardLayoutEditor:
         for x in range(8):
             for y in range(8):
                 cell = layout['matrix'][x][y]
-                if cell is None:
+                if cell is None or cell == 'hole':
                     continue
                 rect = self._board_sq_rect(x, y)
                 cx, cy = rect.centerx, rect.centery
@@ -1277,7 +1303,9 @@ class BoardLayoutEditor:
         self.screen.blit(pal_hdr, (px, oy + 6))
 
         for color_str, piece_type, rect in self._palette_rects():
-            is_sel = selected == (color_str, piece_type)
+            is_hole_entry = (color_str == 'hole')
+            is_sel = (selected == 'hole' if is_hole_entry
+                      else selected == (color_str, piece_type))
             hov    = rect.collidepoint(*mouse)
             if is_sel:
                 bg = self.HIGH
@@ -1290,14 +1318,22 @@ class BoardLayoutEditor:
                 tc = self.TEXT
             pygame.draw.rect(self.screen, bg, rect, border_radius=5)
 
-            # Mini icon in the palette row
-            icon = self.piece_icons.get((piece_type, color_str))
             icon_x = rect.left + 4
-            if icon:
-                small = pygame.transform.smoothscale(icon, (24, 24))
-                self.screen.blit(small, small.get_rect(centery=rect.centery, left=icon_x))
-            lbl_text = f"{color_str}  {piece_type}"
-            lbl = self.small_font.render(lbl_text, True, tc)
+            if is_hole_entry:
+                # Draw a small grey swatch for the hole tool
+                swatch = pygame.Rect(icon_x, rect.centery - 10, 24, 20)
+                pygame.draw.rect(self.screen, Colours.HOLE, swatch, border_radius=2)
+                pygame.draw.rect(self.screen, (45, 45, 55),
+                                 swatch.inflate(-6, -6), border_radius=1)
+                lbl = self.small_font.render('Hole  (toggle)', True, tc)
+            else:
+                # Mini piece icon in the palette row
+                icon = self.piece_icons.get((piece_type, color_str))
+                if icon:
+                    small = pygame.transform.smoothscale(icon, (24, 24))
+                    self.screen.blit(small, small.get_rect(centery=rect.centery, left=icon_x))
+                lbl_text = f"{color_str}  {piece_type}"
+                lbl = self.small_font.render(lbl_text, True, tc)
             self.screen.blit(lbl, lbl.get_rect(centery=rect.centery, left=icon_x + 28))
 
         # Bottom buttons

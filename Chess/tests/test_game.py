@@ -821,5 +821,545 @@ class TestPieceEditorButtons(unittest.TestCase):
             self.assertIn(flag, PieceEditor.FLAG_DESCRIPTIONS)
 
 
+# ---------------------------------------------------------------------------
+# PieceEditor geometry helpers (_remove_rule_rect, _add_rule_rect, _find_remove_rule)
+# ---------------------------------------------------------------------------
+
+class TestPieceEditorGeometry(unittest.TestCase):
+
+    def _make_editor(self):
+        from game import PieceEditor
+        ed = object.__new__(PieceEditor)
+        ed.w = 640
+        ed.h = 640
+        ed.PADDING    = PieceEditor.PADDING
+        ed.TOGGLE_H   = PieceEditor.TOGGLE_H
+        ed.CELL       = PieceEditor.CELL
+        ed.CELL_GAP   = PieceEditor.CELL_GAP
+        ed.GRID_RANGE = PieceEditor.GRID_RANGE
+        ed.GRID_CELLS = PieceEditor.GRID_CELLS
+        ed.GRID_SIZE  = PieceEditor.GRID_SIZE
+        ed.FLAG_Y_OFF = PieceEditor.FLAG_Y_OFF
+        ed.RULE_H     = PieceEditor.RULE_H
+        return ed
+
+    # ── _remove_rule_rect ──────────────────────────────────────────────
+
+    def test_remove_rule_rect_returns_rect(self):
+        ed = self._make_editor()
+        rect = ed._remove_rule_rect(rule_y=100, right_x=220, right_w=400)
+        self.assertIsInstance(rect, pygame.Rect)
+
+    def test_remove_rule_rect_width_and_height(self):
+        ed = self._make_editor()
+        rect = ed._remove_rule_rect(rule_y=100, right_x=220, right_w=400)
+        self.assertEqual(rect.width, 22)
+        self.assertEqual(rect.height, 18)
+
+    def test_remove_rule_rect_top(self):
+        ed = self._make_editor()
+        rect = ed._remove_rule_rect(rule_y=100, right_x=220, right_w=400)
+        self.assertEqual(rect.top, 102)  # rule_y + 2
+
+    def test_remove_rule_rect_right_edge(self):
+        """Button should end 2px inside right edge: right_x + right_w - 24 + 22."""
+        ed = self._make_editor()
+        right_x, right_w = 220, 400
+        rect = ed._remove_rule_rect(rule_y=0, right_x=right_x, right_w=right_w)
+        self.assertEqual(rect.right, right_x + right_w - 2)
+
+    # ── _add_rule_rect ────────────────────────────────────────────────
+
+    def test_add_rule_rect_returns_rect(self):
+        ed = self._make_editor()
+        piece_def = {'move_rules': []}
+        rect = ed._add_rule_rect(piece_def, right_x=220, scroll_y=0)
+        self.assertIsInstance(rect, pygame.Rect)
+
+    def test_add_rule_rect_no_rules_top(self):
+        """With 0 rules: top = 92 - scroll_y + 0 * RULE_H."""
+        ed = self._make_editor()
+        piece_def = {'move_rules': []}
+        rect = ed._add_rule_rect(piece_def, right_x=220, scroll_y=0)
+        self.assertEqual(rect.top, 92)
+
+    def test_add_rule_rect_one_rule_top(self):
+        """With 1 rule: top = 92 + RULE_H."""
+        ed = self._make_editor()
+        piece_def = {'move_rules': [{'deltas': []}]}
+        rect = ed._add_rule_rect(piece_def, right_x=220, scroll_y=0)
+        self.assertEqual(rect.top, 92 + ed.RULE_H)
+
+    def test_add_rule_rect_two_rules_top(self):
+        ed = self._make_editor()
+        rules = [{'deltas': []}, {'deltas': []}]
+        piece_def = {'move_rules': rules}
+        rect = ed._add_rule_rect(piece_def, right_x=220, scroll_y=0)
+        self.assertEqual(rect.top, 92 + 2 * ed.RULE_H)
+
+    def test_add_rule_rect_scroll_offset(self):
+        ed = self._make_editor()
+        piece_def = {'move_rules': []}
+        rect = ed._add_rule_rect(piece_def, right_x=220, scroll_y=30)
+        self.assertEqual(rect.top, 92 - 30)
+
+    def test_add_rule_rect_size(self):
+        ed = self._make_editor()
+        rect = ed._add_rule_rect({'move_rules': []}, right_x=220, scroll_y=0)
+        self.assertEqual(rect.width, 110)
+        self.assertEqual(rect.height, 24)
+
+    # ── _find_remove_rule ─────────────────────────────────────────────
+
+    def test_find_remove_rule_miss(self):
+        ed = self._make_editor()
+        piece_def = {'move_rules': [{'deltas': []}]}
+        result = ed._find_remove_rule(piece_def, 0, 0, 220, 400, 0)
+        self.assertIsNone(result)
+
+    def test_find_remove_rule_first_rule(self):
+        ed = self._make_editor()
+        piece_def = {'move_rules': [{'deltas': []}, {'deltas': []}]}
+        right_x, right_w, scroll_y = 220, 400, 0
+        rect = ed._remove_rule_rect(92, right_x, right_w)
+        result = ed._find_remove_rule(
+            piece_def, rect.centerx, rect.centery, right_x, right_w, scroll_y)
+        self.assertEqual(result, 0)
+
+    def test_find_remove_rule_second_rule(self):
+        ed = self._make_editor()
+        piece_def = {'move_rules': [{'deltas': []}, {'deltas': []}]}
+        right_x, right_w, scroll_y = 220, 400, 0
+        rule1_y = 92 + ed.RULE_H
+        rect = ed._remove_rule_rect(rule1_y, right_x, right_w)
+        result = ed._find_remove_rule(
+            piece_def, rect.centerx, rect.centery, right_x, right_w, scroll_y)
+        self.assertEqual(result, 1)
+
+    def test_find_remove_rule_empty_rules(self):
+        ed = self._make_editor()
+        piece_def = {'move_rules': []}
+        result = ed._find_remove_rule(piece_def, 300, 200, 220, 400, 0)
+        self.assertIsNone(result)
+
+
+# ---------------------------------------------------------------------------
+# Game._toggle_hints
+# ---------------------------------------------------------------------------
+
+class TestFindToggleMiss(unittest.TestCase):
+    """_find_toggle returns None when no flag rect is hit."""
+
+    def _make_editor(self):
+        from game import PieceEditor
+        ed = object.__new__(PieceEditor)
+        ed.w = 640
+        ed.h = 640
+        ed.PADDING    = PieceEditor.PADDING
+        ed.TOGGLE_H   = PieceEditor.TOGGLE_H
+        ed.CELL       = PieceEditor.CELL
+        ed.CELL_GAP   = PieceEditor.CELL_GAP
+        ed.GRID_RANGE = PieceEditor.GRID_RANGE
+        ed.GRID_CELLS = PieceEditor.GRID_CELLS
+        ed.GRID_SIZE  = PieceEditor.GRID_SIZE
+        ed.FLAG_Y_OFF = PieceEditor.FLAG_Y_OFF
+        ed.RULE_H     = PieceEditor.RULE_H
+        return ed
+
+    def test_find_toggle_no_rules_returns_none(self):
+        ed = self._make_editor()
+        result = ed._find_toggle({'move_rules': []}, 100, 100, 220, 400, 0)
+        self.assertIsNone(result)
+
+    def test_find_toggle_miss_coordinate_returns_none(self):
+        from game import _RULE_FLAGS
+        ed = self._make_editor()
+        rule = {f: False for f in _RULE_FLAGS}
+        piece_def = {'move_rules': [rule]}
+        # Click far outside any toggle rect
+        result = ed._find_toggle(piece_def, 0, 0, 220, 400, 0)
+        self.assertIsNone(result)
+
+
+class TestToggleHints(unittest.TestCase):
+
+    def _make_game(self):
+        from game import Game
+        game = object.__new__(Game)
+        game.graphics = types.SimpleNamespace(show_hints=True, highlights=False)
+        return game
+
+    def test_toggle_off(self):
+        game = self._make_game()
+        game._toggle_hints()
+        self.assertFalse(game.graphics.show_hints)
+
+    def test_toggle_on(self):
+        game = self._make_game()
+        game.graphics.show_hints = False
+        game._toggle_hints()
+        self.assertTrue(game.graphics.show_hints)
+
+    def test_toggle_off_clears_highlights(self):
+        game = self._make_game()
+        game.graphics.highlights = [(1, 1), (2, 2)]
+        game._toggle_hints()
+        self.assertFalse(game.graphics.highlights)
+
+    def test_toggle_on_does_not_clear_highlights(self):
+        game = self._make_game()
+        game.graphics.show_hints = False
+        game.graphics.highlights = [(1, 1)]
+        game._toggle_hints()
+        self.assertEqual(game.graphics.highlights, [(1, 1)])
+
+    def test_double_toggle_restores_state(self):
+        game = self._make_game()
+        original = game.graphics.show_hints
+        game._toggle_hints()
+        game._toggle_hints()
+        self.assertEqual(game.graphics.show_hints, original)
+
+
+# ---------------------------------------------------------------------------
+# PieceEditor._draw — smoke tests (no crash + minimal state assertions)
+# ---------------------------------------------------------------------------
+
+def make_piece_editor_stub(w=640, h=640):
+    """PieceEditor instance with all required state set manually."""
+    from game import PieceEditor
+    ed = object.__new__(PieceEditor)
+    ed.w = w
+    ed.h = h
+    ed.screen = pygame.Surface((w, h), pygame.SRCALPHA)
+    ed.title_font = pygame.font.SysFont(None, 32)
+    ed.label_font = pygame.font.SysFont(None, 22)
+    ed.small_font = pygame.font.SysFont(None, 16)
+    ed.tiny_font  = pygame.font.SysFont(None, 13)
+    for attr in ('PADDING', 'TOGGLE_H', 'CELL', 'CELL_GAP', 'GRID_RANGE',
+                 'GRID_CELLS', 'GRID_SIZE', 'FLAG_Y_OFF', 'RULE_H',
+                 'BG', 'PANEL_BG', 'SEL_BG', 'SEL_TEXT', 'TEXT', 'DIM_TEXT',
+                 'BTN_BG', 'BTN_HOV', 'BTN_SAVE', 'BTN_PLAY', 'BTN_RESET',
+                 'TITLE_COLOR', 'ON_COLOR', 'OFF_COLOR', 'FLAG_DESCRIPTIONS'):
+        setattr(ed, attr, getattr(PieceEditor, attr))
+    return ed
+
+
+_DRAW_DEFAULTS = dict(
+    left_w=200, right_x=216, right_w=400,
+    btn_y=580, btn_h=42, mouse=(0, 0), scroll_y=0, status_msg='',
+)
+
+_FULL_RULE = {
+    'deltas': [[1, 0], [0, 1]],
+    'sliding': True,
+    'directional': False,
+    'move_only': False,
+    'capture_only': False,
+    'jump_capture': False,
+}
+
+
+class TestPieceEditorDraw(unittest.TestCase):
+
+    def test_draw_empty_defs_no_error(self):
+        ed = make_piece_editor_stub()
+        ed._draw({}, None, [], **_DRAW_DEFAULTS)
+
+    def test_draw_no_selection_no_error(self):
+        ed = make_piece_editor_stub()
+        defs = {'pawn': {'move_rules': []}}
+        ed._draw(defs, None, ['pawn'], **_DRAW_DEFAULTS)
+
+    def test_draw_selection_no_rules(self):
+        ed = make_piece_editor_stub()
+        defs = {'pawn': {'move_rules': []}}
+        ed._draw(defs, 'pawn', ['pawn'], **_DRAW_DEFAULTS)
+
+    def test_draw_selection_with_one_rule(self):
+        ed = make_piece_editor_stub()
+        defs = {'pawn': {'move_rules': [dict(_FULL_RULE)]}}
+        ed._draw(defs, 'pawn', ['pawn'], **_DRAW_DEFAULTS)
+
+    def test_draw_selection_with_two_rules(self):
+        ed = make_piece_editor_stub()
+        import copy
+        defs = {'queen': {'move_rules': [copy.deepcopy(_FULL_RULE),
+                                         copy.deepcopy(_FULL_RULE)]}}
+        ed._draw(defs, 'queen', ['queen'], **_DRAW_DEFAULTS)
+
+    def test_draw_multiple_pieces_in_list(self):
+        ed = make_piece_editor_stub()
+        defs = {
+            'pawn':   {'move_rules': [dict(_FULL_RULE)]},
+            'bishop': {'move_rules': []},
+        }
+        ed._draw(defs, 'pawn', list(defs.keys()), **_DRAW_DEFAULTS)
+
+    def test_draw_status_message_rendered(self):
+        ed = make_piece_editor_stub()
+        defs = {'pawn': {'move_rules': []}}
+        kw = dict(_DRAW_DEFAULTS)
+        kw['status_msg'] = 'Saved!'
+        # Should not raise
+        ed._draw(defs, 'pawn', ['pawn'], **kw)
+
+    def test_draw_scroll_y_nonzero(self):
+        ed = make_piece_editor_stub()
+        import copy
+        rules = [copy.deepcopy(_FULL_RULE)] * 3
+        defs = {'rook': {'move_rules': rules}}
+        kw = dict(_DRAW_DEFAULTS)
+        kw['scroll_y'] = 50
+        ed._draw(defs, 'rook', ['rook'], **kw)
+
+    def test_draw_hover_over_flag_shows_tooltip(self):
+        """Hovering the mouse over a flag toggle should not raise."""
+        from game import _RULE_FLAGS
+        ed = make_piece_editor_stub()
+        rule = {f: False for f in _RULE_FLAGS}
+        rule['deltas'] = [[1, 0]]
+        defs = {'pawn': {'move_rules': [rule]}}
+        right_x, right_w = 216, 400
+        toggle_rects = ed._rule_toggle_rects(rule, 92, right_x, right_w)
+        flag = list(toggle_rects.keys())[0]
+        rect = toggle_rects[flag]
+        kw = dict(_DRAW_DEFAULTS)
+        kw['mouse'] = (rect.centerx, rect.centery)
+        ed._draw(defs, 'pawn', ['pawn'], **kw)
+
+    def test_draw_hover_over_delta_shows_tooltip(self):
+        """Hovering the mouse over a delta cell should not raise."""
+        ed = make_piece_editor_stub()
+        rule = dict(_FULL_RULE)
+        defs = {'pawn': {'move_rules': [rule]}}
+        right_x = 216
+        delta_rects = ed._delta_grid_rects(92, right_x)
+        target_rect = delta_rects[(1, 0)]
+        kw = dict(_DRAW_DEFAULTS)
+        kw['mouse'] = (target_rect.centerx, target_rect.centery)
+        ed._draw(defs, 'pawn', ['pawn'], **kw)
+
+    def test_draw_hover_remove_button(self):
+        """Hovering the mouse over the remove-rule button should not raise."""
+        ed = make_piece_editor_stub()
+        rule = dict(_FULL_RULE)
+        defs = {'pawn': {'move_rules': [rule]}}
+        right_x, right_w = 216, 400
+        rm_rect = ed._remove_rule_rect(92, right_x, right_w)
+        kw = dict(_DRAW_DEFAULTS)
+        kw['mouse'] = (rm_rect.centerx, rm_rect.centery)
+        ed._draw(defs, 'pawn', ['pawn'], **kw)
+
+    def test_draw_hover_add_rule_button(self):
+        """Hovering over the '+ Add Rule' button should not raise."""
+        ed = make_piece_editor_stub()
+        piece_def = {'move_rules': []}
+        defs = {'pawn': piece_def}
+        add_rect = ed._add_rule_rect(piece_def, right_x=216, scroll_y=0)
+        kw = dict(_DRAW_DEFAULTS)
+        kw['mouse'] = (add_rect.centerx, add_rect.centery)
+        ed._draw(defs, 'pawn', ['pawn'], **kw)
+
+    def test_draw_active_delta_highlighted(self):
+        """Rule with active deltas should draw without error (ON_COLOR path)."""
+        ed = make_piece_editor_stub()
+        rule = {
+            'deltas': [[1, 1], [-1, -1]],
+            'sliding': False,
+        }
+        defs = {'bishop': {'move_rules': [rule]}}
+        ed._draw(defs, 'bishop', ['bishop'], **_DRAW_DEFAULTS)
+
+    def test_draw_selected_piece_highlighted_in_list(self):
+        """Selected piece name should get SEL_BG treatment (no error)."""
+        ed = make_piece_editor_stub()
+        defs = {
+            'pawn':   {'move_rules': []},
+            'bishop': {'move_rules': []},
+        }
+        ed._draw(defs, 'bishop', list(defs.keys()), **_DRAW_DEFAULTS)
+
+    def test_draw_hover_piece_in_list(self):
+        """Mouse over a piece name in the left panel should not raise."""
+        ed = make_piece_editor_stub()
+        defs = {'pawn': {'move_rules': []}}
+        piece_rects = ed._piece_rects(['pawn'], left_w=200)
+        rect = piece_rects[0]
+        kw = dict(_DRAW_DEFAULTS)
+        kw['mouse'] = (rect.centerx, rect.centery)
+        ed._draw(defs, None, ['pawn'], **kw)
+
+    def test_draw_hover_bottom_button(self):
+        """Mouse over a bottom button should not raise."""
+        ed = make_piece_editor_stub()
+        defs = {'pawn': {'move_rules': []}}
+        btn_rects = ed._button_rects(btn_y=_DRAW_DEFAULTS['btn_y'],
+                                     btn_h=_DRAW_DEFAULTS['btn_h'])
+        save_rect = btn_rects['Save']
+        kw = dict(_DRAW_DEFAULTS)
+        kw['mouse'] = (save_rect.centerx, save_rect.centery)
+        ed._draw(defs, 'pawn', ['pawn'], **kw)
+
+    def test_draw_rule_sliding_on(self):
+        ed = make_piece_editor_stub()
+        rule = dict(_FULL_RULE)
+        rule['sliding'] = True
+        defs = {'rook': {'move_rules': [rule]}}
+        ed._draw(defs, 'rook', ['rook'], **_DRAW_DEFAULTS)
+
+    def test_draw_rule_capture_only(self):
+        ed = make_piece_editor_stub()
+        rule = dict(_FULL_RULE)
+        rule['capture_only'] = True
+        defs = {'pawn': {'move_rules': [rule]}}
+        ed._draw(defs, 'pawn', ['pawn'], **_DRAW_DEFAULTS)
+
+
+# ---------------------------------------------------------------------------
+# Graphics.__init__ and Game.__init__ — cover their bodies directly
+# ---------------------------------------------------------------------------
+
+class TestGraphicsInit(unittest.TestCase):
+
+    def test_graphics_init_sets_show_hints(self):
+        g = Graphics()
+        self.assertTrue(g.show_hints)
+
+    def test_graphics_init_sets_highlights_false(self):
+        g = Graphics()
+        self.assertFalse(g.highlights)
+
+    def test_graphics_init_square_size_non_negative(self):
+        g = Graphics()
+        self.assertGreaterEqual(g.square_size, 0)
+
+
+class TestGameInit(unittest.TestCase):
+
+    def test_game_init_turn_is_white(self):
+        game = Game()
+        self.assertEqual(game.turn, W)
+
+    def test_game_init_selected_piece_none(self):
+        game = Game()
+        self.assertIsNone(game.selected_piece)
+
+    def test_game_init_has_graphics(self):
+        game = Game()
+        self.assertIsInstance(game.graphics, Graphics)
+
+    def test_game_init_has_board(self):
+        game = Game()
+        self.assertIsInstance(game.board, Board)
+
+    def test_game_setup_no_error(self):
+        game = Game()
+        game.setup()
+
+
+# ---------------------------------------------------------------------------
+# Graphics.load_piece_icons — various def shapes
+# ---------------------------------------------------------------------------
+
+_CHESS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
+
+def _defs_with_absolute_paths():
+    """Return pieces_defs with icon paths resolved to absolute paths."""
+    from pieces import AllPieces
+    import copy
+    defs = copy.deepcopy(AllPieces().pieces_defs)
+    for defn in defs.values():
+        icon = defn.get('icon')
+        if icon and not os.path.isabs(icon):
+            defn['icon'] = os.path.join(_CHESS_DIR, icon)
+    return defs
+
+
+class TestLoadPieceIcons(unittest.TestCase):
+
+    def setUp(self):
+        self.g = make_graphics_stub()
+
+    def test_empty_defs_clears_icons(self):
+        self.g.piece_icons = {'old': 'value'}
+        self.g.load_piece_icons({})
+        self.assertEqual(self.g.piece_icons, {})
+
+    def test_no_icon_key_skipped(self):
+        self.g.load_piece_icons({'pawn': {}})
+        self.assertEqual(self.g.piece_icons, {})
+
+    def test_none_icon_skipped(self):
+        self.g.load_piece_icons({'pawn': {'icon': None}})
+        self.assertEqual(self.g.piece_icons, {})
+
+    def test_missing_file_skipped(self):
+        self.g.load_piece_icons({'pawn': {'icon': '/no/such/file.svg'}})
+        self.assertEqual(self.g.piece_icons, {})
+
+    def test_real_defs_loads_icons(self):
+        self.g.load_piece_icons(_defs_with_absolute_paths())
+        self.assertGreater(len(self.g.piece_icons), 0)
+
+    def test_real_defs_white_and_black_loaded(self):
+        self.g.load_piece_icons(_defs_with_absolute_paths())
+        keys = list(self.g.piece_icons.keys())
+        colors = {k[1] for k in keys}
+        self.assertIn('white', colors)
+        self.assertIn('black', colors)
+
+
+# ---------------------------------------------------------------------------
+# Icon rendering branch in draw_board_pieces / draw_promotion_picker
+# ---------------------------------------------------------------------------
+
+class TestIconRendering(unittest.TestCase):
+
+    def setUp(self):
+        self.g = make_graphics_stub()
+        self.g.load_piece_icons(_defs_with_absolute_paths())
+        self.board = Board()
+
+    def test_draw_board_pieces_with_icons(self):
+        """Exercises the icon blit branch (line 386)."""
+        self.g.draw_board_pieces(self.board)
+
+    def test_draw_promotion_picker_white_with_icons(self):
+        """Exercises the icon blit branch in promotion picker (line 477)."""
+        self.g.draw_promotion_picker('white')
+
+    def test_draw_promotion_picker_black_with_icons(self):
+        self.g.draw_promotion_picker('black')
+
+
+# ---------------------------------------------------------------------------
+# Game._win_condition_name fallback
+# ---------------------------------------------------------------------------
+
+class TestWinConditionName(unittest.TestCase):
+
+    def _make_game(self):
+        from game import Game
+        game = object.__new__(Game)
+        game.win_condition = ChessWinCondition()
+        return game
+
+    def test_chess_win_condition_name(self):
+        game = self._make_game()
+        self.assertEqual(game._win_condition_name(), 'chess')
+
+    def test_checkers_win_condition_name(self):
+        game = self._make_game()
+        game.win_condition = CheckersWinCondition()
+        self.assertEqual(game._win_condition_name(), 'checkers')
+
+    def test_unknown_win_condition_returns_chess(self):
+        game = self._make_game()
+        game.win_condition = object()   # not ChessWin or CheckersWin
+        self.assertEqual(game._win_condition_name(), 'chess')
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

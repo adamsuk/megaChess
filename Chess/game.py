@@ -334,9 +334,17 @@ class Graphics:
         save_exists: whether an autosave file is present (enables Load button).
         """
         self.draw_board_squares(board)
-        if click and self.show_hints:
-            self.highlight_squares(legal_moves, self.pixel_coords(mouse_pos))
-        elif not click and self.highlights:
+        # Highlight the selected piece and its legal moves whenever a piece is
+        # selected and hints are enabled.  Basing this on `selected_piece`
+        # (not `click`) avoids two bugs:
+        #   1. `click` is overwritten by any subsequent event (e.g. MOUSEMOTION)
+        #      in the same frame, so highlights would vanish almost immediately.
+        #   2. pixel_coords(mouse_pos) returned pixel-space coords which
+        #      highlight_squares would then multiply by square_size again,
+        #      placing the origin square far off-screen.
+        if selected_piece is not None and self.show_hints:
+            self.highlight_squares(legal_moves, selected_piece)
+        else:
             self.highlights = False
 
         self.draw_board_pieces(board)

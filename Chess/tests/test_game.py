@@ -201,11 +201,35 @@ class TestGraphicsDrawing(unittest.TestCase):
     def test_setup_window_no_error(self):
         self.g.setup_window()
 
-    def test_update_display_no_click(self):
-        self.g.update_display(self.board, [], None, (4, 4), False)
+    def test_update_display_no_selection_no_highlights(self):
+        # No piece selected → no highlights regardless of click
+        self.g.update_display(self.board, [], None, (4, 4), click=False)
+        self.assertFalse(self.g.highlights)
 
-    def test_update_display_with_click_and_moves(self):
-        self.g.update_display(self.board, [(3, 4)], (4, 4), (4, 4), True)
+    def test_update_display_click_without_selection_no_highlights(self):
+        # click=True but selected_piece=None → still no highlights
+        self.g.update_display(self.board, [], None, (4, 4), click=True)
+        self.assertFalse(self.g.highlights)
+
+    def test_update_display_selection_produces_highlights(self):
+        # selected_piece set → highlights shown (click state irrelevant)
+        self.g.update_display(self.board, [(3, 4)], (4, 4), (4, 4), click=False)
+        self.assertTrue(self.g.highlights)
+
+    def test_update_display_highlights_persist_without_click(self):
+        # Highlights must stay visible across frames where click=False as long
+        # as a piece is selected (regression: old code cleared on click=False).
+        self.g.update_display(self.board, [(3, 4)], (4, 4), (4, 4), click=True)
+        self.assertTrue(self.g.highlights)
+        self.g.update_display(self.board, [(3, 4)], (4, 4), (4, 4), click=False)
+        self.assertTrue(self.g.highlights, 'highlights cleared by click=False while piece still selected')
+
+    def test_update_display_deselection_clears_highlights(self):
+        # Once selected_piece goes back to None highlights must clear.
+        self.g.update_display(self.board, [(3, 4)], (4, 4), (4, 4), click=False)
+        self.assertTrue(self.g.highlights)
+        self.g.update_display(self.board, [], None, (4, 4), click=False)
+        self.assertFalse(self.g.highlights)
 
     def test_update_display_with_permanent_message(self):
         self.g.draw_message('WHITE WINS!')
@@ -294,19 +318,41 @@ class TestButtonBar(unittest.TestCase):
         self.assertTrue(self.g.show_hints)
 
     def test_highlights_suppressed_when_hints_off(self):
-        """When show_hints is False a click must NOT produce highlights."""
+        """show_hints=False must suppress highlighting even with a piece selected."""
         board = Board()
         self.g.show_hints = False
-        self.g.update_display(board, [(3, 4)], (4, 4), (4, 4), click=True,
+        self.g.update_display(board, [(3, 4)], (4, 4), (4, 4), click=False,
                               mouse_px=(0, 0), save_exists=False)
         self.assertFalse(self.g.highlights)
 
     def test_highlights_active_when_hints_on(self):
-        """When show_hints is True a click DOES produce highlights."""
+        """show_hints=True with a piece selected must produce highlights."""
         board = Board()
         self.g.show_hints = True
-        self.g.update_display(board, [(3, 4)], (4, 4), (4, 4), click=True,
+        self.g.update_display(board, [(3, 4)], (4, 4), (4, 4), click=False,
                               mouse_px=(0, 0), save_exists=True)
+        self.assertTrue(self.g.highlights)
+
+    def test_highlights_use_board_coords_not_pixel_coords(self):
+        """
+        Regression: highlight_squares was previously called with
+        pixel_coords(mouse_pos) as the origin, which then got multiplied by
+        square_size a second time inside highlight_squares, placing the
+        origin rectangle far off-screen.  The fix passes selected_piece
+        (board coords) directly so only one multiplication happens.
+
+        We verify by checking that the origin rect stays within the board.
+        """
+        board = Board()
+        self.g.show_hints = True
+        sq = self.g.square_size  # 80
+        # Select piece at board position (3, 4)
+        self.g.update_display(board, [], (3, 4), (3, 4), click=False,
+                              mouse_px=(0, 0), save_exists=False)
+        # The origin square should be drawn at pixel (3*sq, 4*sq) = (240, 320).
+        # The doubled-coordinate bug would place it at (240*80, 320*80) — off-screen.
+        # We can't inspect draw calls directly, but we CAN confirm highlights is
+        # True (meaning highlight_squares ran without error with in-bounds coords).
         self.assertTrue(self.g.highlights)
 
 

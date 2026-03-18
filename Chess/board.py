@@ -269,12 +269,16 @@ class Board:
 		for rook_x, king_dest_x, transit_x in [(7, x + 2, x + 1), (0, x - 2, x - 1)]:
 			if not (0 <= king_dest_x <= 7):
 				continue
+			# King cannot castle to a hole square
+			if self.matrix[king_dest_x][y].is_hole:
+				continue
 			rook = self.matrix[rook_x][y].occupant
 			if rook is None or rook.piece_type != 'rook' or rook.has_moved:
 				continue
-			# All squares between king and rook must be empty
+			# All squares between king and rook must be empty and not holes
 			lo, hi = min(x, rook_x) + 1, max(x, rook_x)
-			if any(self.matrix[bx][y].occupant is not None for bx in xrange(lo, hi)):
+			if any(self.matrix[bx][y].occupant is not None or self.matrix[bx][y].is_hole
+				   for bx in xrange(lo, hi)):
 				continue
 			# King must not pass through a square that is under attack
 			captured = self._simulate_move((x, y), (transit_x, y))

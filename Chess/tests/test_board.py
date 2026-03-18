@@ -26,6 +26,7 @@ def clear_board(board):
     for x in range(8):
         for y in range(8):
             board.matrix[x][y].occupant = None
+            board.matrix[x][y].is_hole = False
     board.en_passant_target = None
     board.promotion_pending = None
 
@@ -664,6 +665,32 @@ class TestHoleSquares(unittest.TestCase):
         self.board.matrix[5][5].is_hole = True
         d = self.board.to_dict()
         self.assertEqual(d['matrix'][5][5], 'hole')
+
+    def test_castling_blocked_by_hole_in_path(self):
+        """A hole between king and rook prevents castling."""
+        clear_board(self.board)
+        place(self.board, 4, 7, W, 'king')
+        place(self.board, 7, 7, W, 'rook')
+        self.board.matrix[5][7].is_hole = True   # punch a hole in the castling path
+        dests = self.board._castling_destinations((4, 7))
+        self.assertNotIn((6, 7), dests)
+
+    def test_castling_blocked_by_hole_destination(self):
+        """A hole at the king's destination prevents castling."""
+        clear_board(self.board)
+        place(self.board, 4, 7, W, 'king')
+        place(self.board, 7, 7, W, 'rook')
+        self.board.matrix[6][7].is_hole = True   # king would land here
+        dests = self.board._castling_destinations((4, 7))
+        self.assertNotIn((6, 7), dests)
+
+    def test_castling_allowed_when_no_holes(self):
+        """Castling still works normally when there are no holes."""
+        clear_board(self.board)
+        place(self.board, 4, 7, W, 'king')
+        place(self.board, 7, 7, W, 'rook')
+        dests = self.board._castling_destinations((4, 7))
+        self.assertIn((6, 7), dests)
 
 
 if __name__ == '__main__':

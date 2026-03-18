@@ -27,6 +27,7 @@ def clear_board(board):
     for x in range(8):
         for y in range(8):
             board.matrix[x][y].occupant = None
+            board.matrix[x][y].is_hole = False
     board.en_passant_target = None
     board.promotion_pending = None
 

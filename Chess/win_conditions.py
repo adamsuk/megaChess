@@ -56,8 +56,11 @@ class ChessWinCondition(WinCondition):
         current = game.turn
 
         has_safe = False
-        for x in range(8):
-            for y in range(8):
+        N = game.board.board_size
+        for x in range(N):
+            for y in range(N):
+                if game.board.matrix[x][y].is_hole:
+                    continue
                 sq = game.board.location((x, y))
                 if sq.occupant and sq.occupant.color == current:
                     if game.board.legal_moves_safe((x, y)):
@@ -97,8 +100,11 @@ class CheckersWinCondition(WinCondition):
         current = game.turn
 
         has_move = False
-        for x in range(8):
-            for y in range(8):
+        N = game.board.board_size
+        for x in range(N):
+            for y in range(N):
+                if game.board.matrix[x][y].is_hole:
+                    continue
                 sq = game.board.location((x, y))
                 if sq.occupant and sq.occupant.color == current:
                     if game.board.legal_moves((x, y)):

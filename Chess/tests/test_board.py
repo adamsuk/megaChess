@@ -26,6 +26,7 @@ def clear_board(board):
     for x in range(8):
         for y in range(8):
             board.matrix[x][y].occupant = None
+            board.matrix[x][y].is_hole = False
     board.en_passant_target = None
     board.promotion_pending = None
 
@@ -505,6 +506,7 @@ class TestBoardSerialisation(unittest.TestCase):
 
     def test_to_dict_has_required_keys(self):
         d = self.board.to_dict()
+        self.assertIn('board_size', d)
         self.assertIn('matrix', d)
         self.assertIn('en_passant_target', d)
         self.assertIn('promotion_pending', d)
@@ -592,6 +594,175 @@ class TestBoardSerialisation(unittest.TestCase):
         board2.from_dict(d)
         self.assertIsNone(board2.matrix[4][4].occupant)
         self.assertIsNotNone(board2.matrix[0][0].occupant)
+
+
+# ---------------------------------------------------------------------------
+# Hole squares
+# ---------------------------------------------------------------------------
+
+class TestHoleSquares(unittest.TestCase):
+
+    def setUp(self):
+        self.board = Board()
+        clear_board(self.board)
+
+    def test_square_default_is_not_hole(self):
+        self.assertFalse(self.board.matrix[3][3].is_hole)
+
+    def test_to_dict_serialises_hole_as_string(self):
+        self.board.matrix[2][2].is_hole = True
+        d = self.board.to_dict()
+        self.assertEqual(d['matrix'][2][2], 'hole')
+
+    def test_to_dict_empty_square_is_none(self):
+        d = self.board.to_dict()
+        self.assertIsNone(d['matrix'][3][3])
+
+    def test_from_dict_restores_hole_flag(self):
+        self.board.matrix[4][5].is_hole = True
+        d = self.board.to_dict()
+        board2 = Board()
+        board2.from_dict(d)
+        self.assertTrue(board2.matrix[4][5].is_hole)
+
+    def test_from_dict_hole_color_is_hole_colour(self):
+        self.board.matrix[1][1].is_hole = True
+        d = self.board.to_dict()
+        board2 = Board()
+        board2.from_dict(d)
+        self.assertEqual(board2.matrix[1][1].color, Colours.HOLE)
+
+    def test_from_dict_hole_has_no_occupant(self):
+        self.board.matrix[0][0].is_hole = True
+        d = self.board.to_dict()
+        board2 = Board()
+        board2.from_dict(d)
+        self.assertIsNone(board2.matrix[0][0].occupant)
+
+    def test_from_dict_non_hole_squares_unchanged(self):
+        self.board.matrix[3][3].is_hole = True
+        d = self.board.to_dict()
+        board2 = Board()
+        board2.from_dict(d)
+        self.assertFalse(board2.matrix[0][0].is_hole)
+
+    def test_from_dict_backwards_compatible_no_holes(self):
+        """Old JSON without any 'hole' strings loads cleanly."""
+        d = self.board.to_dict()
+        # Confirm no 'hole' entries in default layout dict
+        for col in d['matrix']:
+            for cell in col:
+                self.assertNotEqual(cell, 'hole')
+        board2 = Board()
+        board2.from_dict(d)
+        for x in range(8):
+            for y in range(8):
+                self.assertFalse(board2.matrix[x][y].is_hole)
+
+    def test_hole_square_with_piece_serialises_as_hole(self):
+        """Even if a square somehow has both is_hole and an occupant, hole takes priority."""
+        p = Piece(W, 'rook')
+        self.board.matrix[5][5].occupant = p
+        self.board.matrix[5][5].is_hole = True
+        d = self.board.to_dict()
+        self.assertEqual(d['matrix'][5][5], 'hole')
+
+    def test_castling_blocked_by_hole_in_path(self):
+        """A hole between king and rook prevents castling."""
+        clear_board(self.board)
+        place(self.board, 4, 7, W, 'king')
+        place(self.board, 7, 7, W, 'rook')
+        self.board.matrix[5][7].is_hole = True   # punch a hole in the castling path
+        dests = self.board._castling_destinations((4, 7))
+        self.assertNotIn((6, 7), dests)
+
+    def test_castling_blocked_by_hole_destination(self):
+        """A hole at the king's destination prevents castling."""
+        clear_board(self.board)
+        place(self.board, 4, 7, W, 'king')
+        place(self.board, 7, 7, W, 'rook')
+        self.board.matrix[6][7].is_hole = True   # king would land here
+        dests = self.board._castling_destinations((4, 7))
+        self.assertNotIn((6, 7), dests)
+
+    def test_castling_allowed_when_no_holes(self):
+        """Castling still works normally when there are no holes."""
+        clear_board(self.board)
+        place(self.board, 4, 7, W, 'king')
+        place(self.board, 7, 7, W, 'rook')
+        dests = self.board._castling_destinations((4, 7))
+        self.assertIn((6, 7), dests)
+
+
+
+# ---------------------------------------------------------------------------
+# Variable board size
+# ---------------------------------------------------------------------------
+
+class TestBoardSize(unittest.TestCase):
+
+    def test_default_board_size_is_8(self):
+        board = Board()
+        self.assertEqual(board.board_size, 8)
+
+    def test_custom_board_size_10(self):
+        board = Board(board_size=10)
+        self.assertEqual(board.board_size, 10)
+
+    def test_matrix_dimensions_match_board_size(self):
+        board = Board(board_size=10)
+        self.assertEqual(len(board.matrix), 10)
+        for col in board.matrix:
+            self.assertEqual(len(col), 10)
+
+    def test_to_dict_serialises_board_size(self):
+        board = Board(board_size=10)
+        d = board.to_dict()
+        self.assertEqual(d['board_size'], 10)
+
+    def test_from_dict_restores_board_size(self):
+        board = Board(board_size=10)
+        d = board.to_dict()
+        board2 = Board()
+        board2.from_dict(d)
+        self.assertEqual(board2.board_size, 10)
+
+    def test_from_dict_restores_10x10_matrix(self):
+        board = Board(board_size=10)
+        d = board.to_dict()
+        board2 = Board()
+        board2.from_dict(d)
+        self.assertEqual(len(board2.matrix), 10)
+        for col in board2.matrix:
+            self.assertEqual(len(col), 10)
+
+    def test_from_dict_old_json_no_board_size_defaults_to_8(self):
+        """Old JSON without board_size field should default to 8."""
+        board = Board()
+        d = board.to_dict()
+        del d['board_size']
+        board2 = Board()
+        board2.from_dict(d)
+        self.assertEqual(board2.board_size, 8)
+
+    def test_to_dict_matrix_dimensions_match_board_size(self):
+        board = Board(board_size=10)
+        d = board.to_dict()
+        self.assertEqual(len(d['matrix']), 10)
+        for col in d['matrix']:
+            self.assertEqual(len(col), 10)
+
+    def test_legal_moves_on_10x10_board(self):
+        """Pieces on a 10×10 board should generate correct moves without index errors."""
+        board = Board(board_size=10)
+        for x in range(10):
+            for y in range(10):
+                board.matrix[x][y].occupant = None
+        rook = Piece(W, 'rook')
+        board.matrix[5][5].occupant = rook
+        moves = board.legal_moves((5, 5))
+        # Rook on empty 10×10 at (5,5) should have 9+9-2 = 16+... actually 9+9-2=16? No: 9 in x + 9 in y = 18 moves
+        self.assertEqual(len(moves), 18)
 
 
 if __name__ == '__main__':

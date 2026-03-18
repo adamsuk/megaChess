@@ -17,15 +17,17 @@ except NameError:
 pygame.font.init()
 
 class Board:
-	def __init__(self):
+	def __init__(self, board_size=8):
+		self.board_size = board_size
 		self.pieces_defs = AllPieces().pieces_defs
 		self.en_passant_target = None   # square a pawn just skipped over (ep capture destination)
 		self.promotion_pending = None   # (x, y) of pawn awaiting promotion choice
 		self.new_board()
 
 	def draw_board_squares(self):
-		for x in xrange(8):
-			for y in xrange(8):
+		N = self.board_size
+		for x in xrange(N):
+			for y in xrange(N):
 				color = Colours.CREAM if (x + y) % 2 == 0 else Colours.BROWN
 				self.matrix[int(y)][int(x)] = Square(color, (x, y))
 
@@ -35,8 +37,8 @@ class Board:
 		"""
 
 		# initialize squares and place them in matrix
-
-		self.matrix = [[None] * 8 for i in xrange(8)]
+		N = self.board_size
+		self.matrix = [[None] * N for i in xrange(N)]
 
 		# initialize the board squares
 		self.draw_board_squares()
@@ -44,13 +46,14 @@ class Board:
 		self.en_passant_target = None
 		self.promotion_pending = None
 
-		# initialize chess pieces in starting positions
+		# initialize chess pieces in starting positions (back ranks at rows 0 and N-1)
 		back_rank = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook']
-		for x in xrange(8):
-			self.matrix[x][0].occupant = Piece(Colours.PIECE_BLACK, back_rank[x])
+		for x in xrange(N):
+			piece_type = back_rank[x] if x < len(back_rank) else 'pawn'
+			self.matrix[x][0].occupant = Piece(Colours.PIECE_BLACK, piece_type)
 			self.matrix[x][1].occupant = Piece(Colours.PIECE_BLACK, 'pawn')
-			self.matrix[x][6].occupant = Piece(Colours.WHITE, 'pawn')
-			self.matrix[x][7].occupant = Piece(Colours.WHITE, back_rank[x])
+			self.matrix[x][N - 2].occupant = Piece(Colours.WHITE, 'pawn')
+			self.matrix[x][N - 1].occupant = Piece(Colours.WHITE, piece_type)
 
 
 	def rel(self, dir, coord_tuple):
@@ -116,7 +119,8 @@ class Board:
 			piece_color=piece.color,
 			board_matrix=self.matrix,
 			piece_defs=self.pieces_defs,
-			white_color=Colours.WHITE
+			white_color=Colours.WHITE,
+			board_size=self.board_size
 		).legal
 		moves += self._castling_destinations(coord_tuple)
 		moves += self._en_passant_moves(coord_tuple)
@@ -224,8 +228,9 @@ class Board:
 		>>> board.on_board(3, 9):
 		False
 		"""
+		N = self.board_size
 		x, y = coord_tuple
-		if x < 0 or y < 0 or x > 7 or y > 7:
+		if x < 0 or y < 0 or x >= N or y >= N:
 			return False
 		else:
 			return True
@@ -242,7 +247,7 @@ class Board:
 		if piece is None:
 			return
 		if piece.piece_type == 'pawn':
-			back_rank = 0 if piece.color == Colours.WHITE else 7
+			back_rank = 0 if piece.color == Colours.WHITE else self.board_size - 1
 			if y == back_rank:
 				self.promotion_pending = (x, y)
 
@@ -264,17 +269,22 @@ class Board:
 		if self.is_in_check(piece.color):
 			return []
 
+		N = self.board_size
 		destinations = []
 		# (rook_col, king_destination_col, transit_col)
-		for rook_x, king_dest_x, transit_x in [(7, x + 2, x + 1), (0, x - 2, x - 1)]:
-			if not (0 <= king_dest_x <= 7):
+		for rook_x, king_dest_x, transit_x in [(N - 1, x + 2, x + 1), (0, x - 2, x - 1)]:
+			if not (0 <= king_dest_x < N):
+				continue
+			# King cannot castle to a hole square
+			if self.matrix[king_dest_x][y].is_hole:
 				continue
 			rook = self.matrix[rook_x][y].occupant
 			if rook is None or rook.piece_type != 'rook' or rook.has_moved:
 				continue
-			# All squares between king and rook must be empty
+			# All squares between king and rook must be empty and not holes
 			lo, hi = min(x, rook_x) + 1, max(x, rook_x)
-			if any(self.matrix[bx][y].occupant is not None for bx in xrange(lo, hi)):
+			if any(self.matrix[bx][y].occupant is not None or self.matrix[bx][y].is_hole
+				   for bx in xrange(lo, hi)):
 				continue
 			# King must not pass through a square that is under attack
 			captured = self._simulate_move((x, y), (transit_x, y))
@@ -309,8 +319,9 @@ class Board:
 
 	def find_king(self, color):
 		"""Returns (x, y) of the king belonging to `color`, or None."""
-		for x in xrange(8):
-			for y in xrange(8):
+		N = self.board_size
+		for x in xrange(N):
+			for y in xrange(N):
 				piece = self.matrix[x][y].occupant
 				if piece and piece.color == color and piece.piece_type == 'king':
 					return (x, y)
@@ -321,8 +332,9 @@ class Board:
 		king_pos = self.find_king(color)
 		if king_pos is None:
 			return False
-		for x in xrange(8):
-			for y in xrange(8):
+		N = self.board_size
+		for x in xrange(N):
+			for y in xrange(N):
 				piece = self.matrix[x][y].occupant
 				if piece and piece.color != color:
 					if king_pos in PieceMoves(
@@ -331,7 +343,8 @@ class Board:
 						piece_color=piece.color,
 						board_matrix=self.matrix,
 						piece_defs=self.pieces_defs,
-						white_color=Colours.WHITE
+						white_color=Colours.WHITE,
+						board_size=self.board_size
 					).legal:
 						return True
 		return False
@@ -400,21 +413,25 @@ class Board:
 
 	def to_dict(self):
 		"""Serialise the full board state to a JSON-compatible dict."""
+		N = self.board_size
 		matrix_data = []
-		for x in xrange(8):
+		for x in xrange(N):
 			col = []
-			for y in xrange(8):
-				piece = self.matrix[x][y].occupant
-				if piece is None:
+			for y in xrange(N):
+				sq = self.matrix[x][y]
+				if sq.is_hole:
+					col.append('hole')
+				elif sq.occupant is None:
 					col.append(None)
 				else:
 					col.append({
-						'piece_type': piece.piece_type,
-						'color': self._color_to_str(piece.color),
-						'has_moved': piece.has_moved,
+						'piece_type': sq.occupant.piece_type,
+						'color': self._color_to_str(sq.occupant.color),
+						'has_moved': sq.occupant.has_moved,
 					})
 			matrix_data.append(col)
 		return {
+			'board_size': self.board_size,
 			'matrix': matrix_data,
 			'en_passant_target': list(self.en_passant_target) if self.en_passant_target else None,
 			'promotion_pending': list(self.promotion_pending) if self.promotion_pending else None,
@@ -422,12 +439,18 @@ class Board:
 
 	def from_dict(self, d):
 		"""Restore board state from a dict produced by to_dict()."""
+		self.board_size = d.get('board_size', 8)
+		N = self.board_size
+		self.matrix = [[None] * N for i in xrange(N)]
 		self.draw_board_squares()
 		self.en_passant_target = tuple(d['en_passant_target']) if d.get('en_passant_target') else None
 		self.promotion_pending = tuple(d['promotion_pending']) if d.get('promotion_pending') else None
 		for x, col in enumerate(d['matrix']):
 			for y, cell in enumerate(col):
-				if cell is not None:
+				if cell == 'hole':
+					self.matrix[x][y].is_hole = True
+					self.matrix[x][y].color = Colours.HOLE
+				elif cell is not None:
 					p = Piece(self._str_to_color(cell['color']), cell['piece_type'])
 					p.has_moved = cell['has_moved']
 					self.matrix[x][y].occupant = p
@@ -441,7 +464,8 @@ class Piece:
 		self.has_moved = False   # used for castling eligibility
 
 class Square:
-	def __init__(self, color, coords, occupant=None):
+	def __init__(self, color, coords, occupant=None, is_hole=False):
 		self.color = color # color is either BLACK or WHITE
 		self.occupant = occupant # occupant is a Square object
 		self.coords = coords
+		self.is_hole = is_hole   # True → disabled square (pieces cannot enter)

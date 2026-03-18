@@ -9,6 +9,7 @@ class Colours:
     CREAM = (240, 217, 181)
     BROWN = (181, 136,  99)
     PIECE_BLACK = ( 30,  30,  30)
+    HOLE = ( 65,  65,  75)   # sunken grey for disabled/hole squares
 
 class Directions:
     ##DIRECTIONS##

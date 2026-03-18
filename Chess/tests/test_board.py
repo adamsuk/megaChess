@@ -254,6 +254,57 @@ class TestEnPassant(unittest.TestCase):
         moves = self.board.legal_moves((3, 3))
         self.assertNotIn((4, 2), moves)
 
+    # ── Custom-rule regression tests ─────────────────────────────────────────
+
+    def test_diagonal_custom_move_to_empty_square_does_not_remove_bystander(self):
+        """
+        Regression: a pawn with a custom diagonal-2 rule (e.g. [1, -2]) moving
+        to an empty square must NOT remove the piece at (end_x, start_y) as if
+        it were an en passant capture.  The old code fired the en-passant removal
+        whenever a pawn moved diagonally to an empty square, regardless of whether
+        en_passant_target matched.
+        """
+        # Pawn at (3, 6) — will move to (4, 4) via a custom [1, -2] delta
+        pawn = place(self.board, 3, 6, W, 'pawn', has_moved=True)
+        # Innocent bystander: another pawn directly below the destination column
+        bystander = place(self.board, 4, 6, W, 'pawn', has_moved=True)
+        # No en passant target is set
+        self.board.en_passant_target = None
+        # Manually execute the custom diagonal-2 move
+        self.board.move_piece((3, 6), (4, 4))
+        # The bystander at (4, 6) must still be alive
+        self.assertIsNotNone(self.board.matrix[4][6].occupant,
+                             'Bystander pawn was incorrectly removed by custom diagonal move')
+
+    def test_diagonal_double_push_does_not_set_en_passant_target(self):
+        """
+        Regression: a custom diagonal move with |dy| == 2 (e.g. [1, -2]) must NOT
+        create an en passant target.  En passant setup should only fire for straight
+        (dx == 0) double pushes.
+        """
+        place(self.board, 3, 6, W, 'pawn', has_moved=True)
+        self.board.en_passant_target = None
+        # Diagonal move: dx=1, dy=-2
+        self.board.move_piece((3, 6), (4, 4))
+        self.assertIsNone(self.board.en_passant_target,
+                          'En passant target was incorrectly set after diagonal double-step')
+
+    def test_straight_double_push_still_sets_en_passant_target(self):
+        """Ensure the en-passant fix did not break the normal straight double-push."""
+        place(self.board, 4, 6, W, 'pawn')
+        self.board.move_piece((4, 6), (4, 4))
+        self.assertEqual(self.board.en_passant_target, (4, 5))
+
+    def test_ep_capture_still_works_after_fix(self):
+        """Normal en passant capture must still remove the bypassed pawn."""
+        place(self.board, 4, 1, B, 'pawn')
+        self.board.move_piece((4, 1), (4, 3))          # black double-push → ep target (4,2)
+        place(self.board, 3, 3, W, 'pawn', has_moved=True)
+        self.board.move_piece((3, 3), (4, 2))           # white captures en passant
+        self.assertIsNone(self.board.matrix[4][3].occupant,  # black pawn removed
+                          'En passant did not remove the bypassed pawn')
+        self.assertIsNotNone(self.board.matrix[4][2].occupant)  # white pawn arrived
+
 
 # ---------------------------------------------------------------------------
 # Castling

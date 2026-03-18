@@ -1928,9 +1928,9 @@ class TestBoardLayoutEditorHoles(unittest.TestCase):
 class TestPresets(unittest.TestCase):
 
     def setUp(self):
-        from game import _preset_standard, _preset_triangle, _preset_hexagon
+        from game import _preset_standard, _preset_diamond, _preset_hexagon
         self._preset_standard = _preset_standard
-        self._preset_triangle = _preset_triangle
+        self._preset_diamond  = _preset_diamond
         self._preset_hexagon  = _preset_hexagon
 
     def test_standard_board_size_is_8(self):
@@ -1949,27 +1949,36 @@ class TestPresets(unittest.TestCase):
             for cell in col:
                 self.assertNotEqual(cell, 'hole')
 
-    def test_triangle_board_size_is_8(self):
-        layout = self._preset_triangle()
+    def test_diamond_board_size_is_8(self):
+        layout = self._preset_diamond()
         self.assertEqual(layout['board_size'], 8)
 
-    def test_triangle_upper_left_is_hole(self):
-        """(0,0) is a hole since 0+0=0 < 7."""
-        layout = self._preset_triangle()
+    def test_diamond_corner_is_hole(self):
+        """(0,0) is a hole: abs(2*0-7)+abs(2*0-7)=14 > 10."""
+        layout = self._preset_diamond()
         self.assertEqual(layout['matrix'][0][0], 'hole')
 
-    def test_triangle_corner_not_hole(self):
-        """(7,7) must be playable (7+7=14 >= 7)."""
-        layout = self._preset_triangle()
-        self.assertNotEqual(layout['matrix'][7][7], 'hole')
+    def test_diamond_center_not_hole(self):
+        """(3,3) is playable: abs(6-7)+abs(6-7)=2 <= 10."""
+        layout = self._preset_diamond()
+        self.assertNotEqual(layout['matrix'][3][3], 'hole')
 
-    def test_triangle_loads_into_board(self):
-        layout = self._preset_triangle()
+    def test_diamond_symmetric_horizontally(self):
+        """Diamond is symmetric about y=3.5: hole(x,0) iff hole(x,7)."""
+        layout = self._preset_diamond()
+        for x in range(8):
+            self.assertEqual(
+                layout['matrix'][x][0] == 'hole',
+                layout['matrix'][x][7] == 'hole',
+            )
+
+    def test_diamond_loads_into_board(self):
+        layout = self._preset_diamond()
         board = Board()
         board.from_dict(layout)
         self.assertEqual(board.board_size, 8)
         self.assertTrue(board.matrix[0][0].is_hole)
-        self.assertFalse(board.matrix[7][7].is_hole)
+        self.assertFalse(board.matrix[3][3].is_hole)
 
     def test_hexagon_board_size_is_12(self):
         layout = self._preset_hexagon()

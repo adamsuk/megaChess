@@ -1243,8 +1243,8 @@ class BoardLayoutEditor:
 
     def _make_preset(self, name):
         """Return a preset layout dict by name."""
-        if name == 'Triangle 8×8':
-            return _preset_triangle()
+        if name == 'Diamond 8×8':
+            return _preset_diamond()
         elif name == 'Hexagon 12×12':
             return _preset_hexagon()
         return _preset_standard()
@@ -1296,7 +1296,7 @@ class BoardLayoutEditor:
 
     def _preset_rects(self, btn_y, btn_h, board_size=8):
         """Return dict of preset_name → pygame.Rect, above the bottom buttons."""
-        names = ['Standard 8×8', 'Triangle 8×8', 'Hexagon 12×12']
+        names = ['Standard 8×8', 'Diamond 8×8', 'Hexagon 12×12']
         sq = self._board_sq_size(board_size)
         ox, _ = self._board_origin()
         total_w = sq * board_size
@@ -1501,35 +1501,44 @@ def _preset_standard():
     return _make_layout(8, matrix)
 
 
-def _preset_triangle():
+def _preset_diamond():
     """
-    Triangle board on 8×8.  Holes where x + y < 7 leave a lower-right triangle
-    (36 playable squares).  White starts along the bottom row and right pawns;
-    Black starts along the right column.
+    Diamond (rhombus) board on 8×8.  Holes where abs(2*x - 7) + abs(2*y - 7) > 10
+    leave a diamond shape (52 playable squares) symmetric about both the
+    horizontal and vertical midlines.
+
+    Playable squares per row:
+      y=0,7 → x=2..5 (4 squares)
+      y=1,6 → x=1..6 (6 squares)
+      y=2..5 → x=0..7 (8 squares)
+
+    White back rank at y=7: rook(2), queen(3), king(4), rook(5)
+    White pawns at y=6: x=1..6
+    Black back rank at y=0: rook(2), queen(3), king(4), rook(5)
+    Black pawns at y=1: x=1..6
     """
     N = 8
-    matrix = [['hole'] * N for _ in range(N)]
-    # Clear holes for the playable triangle
-    for x in range(N):
-        for y in range(N):
-            if x + y >= N - 1:
-                matrix[x][y] = None
 
-    # White back rank at y=7 (all 8 squares are in the triangle)
-    white_back = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook']
-    for x in range(N):
-        matrix[x][7] = {'piece_type': white_back[x], 'color': 'white', 'has_moved': False}
-    # White pawns at y=6, x=1..7 (x=0,y=6 is a hole since 0+6=6 < 7)
-    for x in range(1, N):
+    def is_hole(x, y):
+        return abs(2 * x - 7) + abs(2 * y - 7) > 10
+
+    matrix = [['hole' if is_hole(x, y) else None for y in range(N)] for x in range(N)]
+
+    # White back rank at y=7 (x=2..5 are playable)
+    white_back = {2: 'rook', 3: 'queen', 4: 'king', 5: 'rook'}
+    for x, pt in white_back.items():
+        matrix[x][7] = {'piece_type': pt, 'color': 'white', 'has_moved': False}
+    # White pawns at y=6, x=1..6
+    for x in range(1, 7):
         matrix[x][6] = {'piece_type': 'pawn', 'color': 'white', 'has_moved': False}
 
-    # Black back rank along x=7, y=0..6
-    black_back = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight']
-    for y in range(7):
-        matrix[7][y] = {'piece_type': black_back[y], 'color': 'black', 'has_moved': False}
-    # Black pawns at x=6, y=1..6 (x=6,y=0 is a hole since 6+0=6 < 7)
-    for y in range(1, 7):
-        matrix[6][y] = {'piece_type': 'pawn', 'color': 'black', 'has_moved': False}
+    # Black back rank at y=0 (x=2..5 are playable)
+    black_back = {2: 'rook', 3: 'queen', 4: 'king', 5: 'rook'}
+    for x, pt in black_back.items():
+        matrix[x][0] = {'piece_type': pt, 'color': 'black', 'has_moved': False}
+    # Black pawns at y=1, x=1..6
+    for x in range(1, 7):
+        matrix[x][1] = {'piece_type': 'pawn', 'color': 'black', 'has_moved': False}
 
     return _make_layout(N, matrix)
 

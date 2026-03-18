@@ -1,37 +1,35 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
   <!--
-    Knight built from distinct recognisable parts rather than one polygon:
-
-    Draw order (back to front):
-      snout rect → neck rect → ear triangle → head circle → eye dot
-
-    The head circle, drawn last, covers the inner portions of the snout and neck,
-    leaving only the protruding tip of the snout and the lower neck visible.
+    Pixel art knight: horse head profile with shine spot, snout, ear,
+    neck with left-face highlight, collar, raised base with drop shadow.
+    Accent dot for the eye.
   -->
-
-  <!-- Snout: rectangle protrudes right of the head -->
-  <rect x="50" y="14" width="20" height="16" rx="3"
-        fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-
-  <!-- Neck: narrow column below the head -->
-  <rect x="30" y="36" width="18" height="26"
-        fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-
-  <!-- Ear: triangle above the head -->
-  <polygon points="28,16 40,2 52,16"
-           fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-
-  <!-- Head circle — drawn on top, covers inner neck/ear/snout edges -->
-  <circle cx="40" cy="26" r="20"
-          fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-
-  <!-- Eye: dark dot on the face, near the snout -->
-  <circle cx="52" cy="20" r="3.5" fill="{stroke}"/>
-
+  <!-- Drop shadow -->
+  <rect x="6"  y="70" width="68" height="6" rx="1" fill="{fill_lo}"/>
+  <!-- Base platform -->
+  <rect x="4"  y="62" width="72" height="12" rx="1" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Base top highlight -->
+  <rect x="5"  y="63" width="70" height="3" fill="{fill_hi}"/>
+  <!-- Base right shadow -->
+  <rect x="72" y="63" width="3"  height="10" fill="{fill_lo}"/>
   <!-- Collar -->
-  <rect x="10" y="61" width="60" height="6"  rx="2"
-        fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Base -->
-  <rect x="6"  y="66" width="68" height="10" rx="4"
-        fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <rect x="8"  y="56" width="64" height="7" rx="1" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Collar top highlight -->
+  <rect x="9"  y="57" width="62" height="2" fill="{fill_hi}"/>
+  <!-- Neck column -->
+  <rect x="28" y="36" width="20" height="22" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Neck left-face highlight -->
+  <rect x="29" y="37" width="5"  height="20" fill="{fill_hi}"/>
+  <!-- Ear (triangle) -->
+  <polygon points="26,16 40,2 54,16" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Snout rectangle -->
+  <rect x="48" y="14" width="22" height="16" rx="2" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Snout top highlight -->
+  <rect x="49" y="15" width="10" height="3" fill="{fill_hi}"/>
+  <!-- Head circle (drawn on top, covers inner neck/ear/snout edges) -->
+  <circle cx="40" cy="26" r="20" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Head shine (top-left) -->
+  <circle cx="32" cy="18" r="9"  fill="{fill_hi}"/>
+  <!-- Eye (accent colour) -->
+  <circle cx="52" cy="20" r="3.5" fill="{accent}"/>
 </svg>

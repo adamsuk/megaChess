@@ -1,4 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <!--
+    Pixel art checkers man: disc with drop shadow, inner ring decoration,
+    top-left shine highlight and bottom-right shadow circle for depth.
+  -->
+  <!-- Drop shadow (slightly offset) -->
+  <circle cx="42" cy="42" r="30" fill="{fill_lo}"/>
+  <!-- Main disc -->
   <circle cx="40" cy="40" r="30" fill="{fill}" stroke="{stroke}" stroke-width="3"/>
-  <circle cx="40" cy="40" r="18" fill="none" stroke="{stroke}" stroke-width="2"/>
+  <!-- Inner decorative ring -->
+  <circle cx="40" cy="40" r="20" fill="none" stroke="{stroke}" stroke-width="2"/>
+  <!-- Top-left shine highlight -->
+  <circle cx="28" cy="28" r="12" fill="{fill_hi}"/>
+  <!-- Bottom-right shadow depth -->
+  <circle cx="52" cy="52" r="8"  fill="{fill_lo}"/>
 </svg>

@@ -1,16 +1,35 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
   <!--
-    King: prominent cross on top, tapering crown body below.
-    Cross vertical overlaps body top by 2 px to ensure no gap.
+    Pixel art king: prominent cross (vertical + horizontal bars each with highlight),
+    tapering crown body with left-face highlight and right-face shadow,
+    accent gem at cross centre, collar, raised base with drop shadow.
   -->
-  <!-- Cross: vertical bar -->
-  <rect x="35" y="4"  width="10" height="28" rx="2" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Cross: horizontal bar -->
-  <rect x="23" y="12" width="34" height="10" rx="2" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Crown body: trapezoid wider at bottom, overlaps cross bottom by 2 px -->
-  <polygon points="20,30 60,30 66,56 14,56" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Drop shadow -->
+  <rect x="8"  y="71" width="64" height="5" rx="1" fill="{fill_lo}"/>
+  <!-- Base platform -->
+  <rect x="6"  y="62" width="68" height="13" rx="1" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Base top highlight -->
+  <rect x="7"  y="63" width="66" height="3" fill="{fill_hi}"/>
+  <!-- Base right shadow -->
+  <rect x="70" y="63" width="3"  height="11" fill="{fill_lo}"/>
   <!-- Collar -->
-  <rect x="12" y="55" width="56" height="6"  rx="2" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Base -->
-  <rect x="8"  y="60" width="64" height="14" rx="4" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <rect x="10" y="55" width="60" height="8" rx="1" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Collar top highlight -->
+  <rect x="11" y="56" width="58" height="2" fill="{fill_hi}"/>
+  <!-- Crown body (trapezoid, wider at bottom) -->
+  <polygon points="18,30 62,30 68,55 12,55" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Crown body left-face highlight -->
+  <polygon points="18,30 24,30 18,55 12,55" fill="{fill_hi}"/>
+  <!-- Crown body right-face shadow -->
+  <polygon points="62,30 68,55 64,55 58,30" fill="{fill_lo}"/>
+  <!-- Cross vertical bar -->
+  <rect x="34" y="3"  width="12" height="30" rx="1" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Cross vertical highlight -->
+  <rect x="35" y="4"  width="4"  height="28" fill="{fill_hi}"/>
+  <!-- Cross horizontal bar -->
+  <rect x="20" y="10" width="40" height="12" rx="1" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Cross horizontal top highlight -->
+  <rect x="21" y="11" width="38" height="3" fill="{fill_hi}"/>
+  <!-- Cross centre accent gem -->
+  <rect x="36" y="12" width="8"  height="8" fill="{accent}"/>
 </svg>

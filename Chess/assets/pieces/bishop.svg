@@ -1,27 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
   <!--
-    Bishop mitre built as a wide diamond/oval (pointed top, flat bottom)
-    rather than a narrow cone.  The wide middle makes it clearly different
-    from the pawn, and the pointed top reads as a mitre hat.
-
-    Draw order: body polygon → band line → collar → base → ball (on top)
+    Pixel art bishop: mitre hat body with left-face highlight, horizontal band
+    with accent gem, ball finial with shine, collar, raised base with drop shadow.
   -->
-
-  <!-- Mitre body: 9-point oval, pointed at top, wide at shoulder, flat at base -->
+  <!-- Drop shadow -->
+  <rect x="10" y="72" width="60" height="5" rx="1" fill="{fill_lo}"/>
+  <!-- Base platform -->
+  <rect x="6"  y="62" width="68" height="14" rx="1" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Base top highlight -->
+  <rect x="7"  y="63" width="66" height="3" fill="{fill_hi}"/>
+  <!-- Base right shadow -->
+  <rect x="70" y="63" width="3"  height="12" fill="{fill_lo}"/>
+  <!-- Collar -->
+  <rect x="14" y="56" width="52" height="7" rx="1" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Collar top highlight -->
+  <rect x="15" y="57" width="50" height="2" fill="{fill_hi}"/>
+  <!-- Mitre body (9-point oval, pointed at top) -->
   <polygon points="40,14 52,20 58,34 54,48 46,56 34,56 26,48 22,34 28,20"
            fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-
-  <!-- Horizontal band across the shoulder — traditional bishop mark -->
+  <!-- Mitre left-face highlight -->
+  <polygon points="40,14 28,20 22,34 26,48 30,44 26,32 30,20 40,14" fill="{fill_hi}"/>
+  <!-- Horizontal band (traditional bishop mark) -->
   <line x1="22" y1="34" x2="58" y2="34" stroke="{stroke}" stroke-width="3"/>
-
-  <!-- Collar -->
-  <rect x="16" y="55" width="48" height="6"  rx="2"
-        fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Base -->
-  <rect x="8"  y="60" width="64" height="16" rx="4"
-        fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-
-  <!-- Ball finial: drawn last so it sits cleanly on the pointed top -->
-  <circle cx="40" cy="10" r="9"
-          fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Accent gem at band centre -->
+  <circle cx="40" cy="34" r="4" fill="{accent}"/>
+  <!-- Ball finial -->
+  <circle cx="40" cy="10" r="9" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Ball shine -->
+  <circle cx="36" cy="7"  r="4" fill="{fill_hi}"/>
 </svg>

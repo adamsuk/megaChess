@@ -1,7 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <!--
+    Pixel art checkers king: disc with drop shadow, inner ring, top-left shine,
+    three accent gems arranged in a crown pattern to indicate kingship.
+  -->
+  <!-- Drop shadow (slightly offset) -->
+  <circle cx="42" cy="42" r="30" fill="{fill_lo}"/>
+  <!-- Main disc -->
   <circle cx="40" cy="40" r="30" fill="{fill}" stroke="{stroke}" stroke-width="3"/>
+  <!-- Inner decorative ring -->
   <circle cx="40" cy="40" r="20" fill="none" stroke="{stroke}" stroke-width="2"/>
-  <circle cx="40" cy="20" r="4" fill="{stroke}"/>
-  <circle cx="26" cy="26" r="4" fill="{stroke}"/>
-  <circle cx="54" cy="26" r="4" fill="{stroke}"/>
+  <!-- Top-left shine highlight -->
+  <circle cx="28" cy="28" r="12" fill="{fill_hi}"/>
+  <!-- Three crown gems (triangle formation) -->
+  <circle cx="40" cy="20" r="5" fill="{accent}"/>
+  <circle cx="26" cy="26" r="5" fill="{accent}"/>
+  <circle cx="54" cy="26" r="5" fill="{accent}"/>
 </svg>

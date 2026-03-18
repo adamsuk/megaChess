@@ -1361,5 +1361,430 @@ class TestWinConditionName(unittest.TestCase):
         self.assertEqual(game._win_condition_name(), 'chess')
 
 
+# ---------------------------------------------------------------------------
+# BoardLayoutEditor
+# ---------------------------------------------------------------------------
+
+from game import BoardLayoutEditor
+import unittest.mock as mock
+
+
+def make_layout_editor():
+    """Instantiate BoardLayoutEditor without opening a real display window."""
+    editor = object.__new__(BoardLayoutEditor)
+    editor.w = 640
+    editor.h = 640
+    editor.screen = pygame.Surface((640, 640))
+    editor.title_font = pygame.font.Font('freesansbold.ttf', 28)
+    editor.label_font = pygame.font.Font('freesansbold.ttf', 18)
+    editor.small_font = pygame.font.Font('freesansbold.ttf', 14)
+    editor.tiny_font  = pygame.font.Font('freesansbold.ttf', 12)
+    editor.piece_icons = {}
+    return editor
+
+
+class TestBoardLayoutEditorDefaultLayout(unittest.TestCase):
+
+    def setUp(self):
+        self.editor = make_layout_editor()
+
+    def test_default_layout_has_matrix(self):
+        layout = self.editor._default_layout()
+        self.assertIn('matrix', layout)
+        self.assertEqual(len(layout['matrix']), 8)
+        self.assertEqual(len(layout['matrix'][0]), 8)
+
+    def test_default_layout_white_pawns_on_row_6(self):
+        layout = self.editor._default_layout()
+        for x in range(8):
+            cell = layout['matrix'][x][6]
+            self.assertIsNotNone(cell)
+            self.assertEqual(cell['piece_type'], 'pawn')
+            self.assertEqual(cell['color'], 'white')
+
+    def test_default_layout_black_pawns_on_row_1(self):
+        layout = self.editor._default_layout()
+        for x in range(8):
+            cell = layout['matrix'][x][1]
+            self.assertIsNotNone(cell)
+            self.assertEqual(cell['piece_type'], 'pawn')
+            self.assertEqual(cell['color'], 'black')
+
+    def test_default_layout_back_rank_white(self):
+        layout = self.editor._default_layout()
+        expected = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook']
+        for x in range(8):
+            cell = layout['matrix'][x][7]
+            self.assertEqual(cell['piece_type'], expected[x])
+            self.assertEqual(cell['color'], 'white')
+
+    def test_default_layout_back_rank_black(self):
+        layout = self.editor._default_layout()
+        expected = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook']
+        for x in range(8):
+            cell = layout['matrix'][x][0]
+            self.assertEqual(cell['piece_type'], expected[x])
+            self.assertEqual(cell['color'], 'black')
+
+    def test_default_layout_middle_rows_empty(self):
+        layout = self.editor._default_layout()
+        for y in range(2, 6):
+            for x in range(8):
+                self.assertIsNone(layout['matrix'][x][y])
+
+    def test_default_layout_no_passant_or_promotion(self):
+        layout = self.editor._default_layout()
+        self.assertIsNone(layout['en_passant_target'])
+        self.assertIsNone(layout['promotion_pending'])
+
+
+class TestBoardLayoutEditorSaveLoad(unittest.TestCase):
+
+    def setUp(self):
+        self.editor = make_layout_editor()
+        self.tmp = tempfile.NamedTemporaryFile(suffix='.json', delete=False)
+        self.tmp.close()
+        self.path = self.tmp.name
+
+    def tearDown(self):
+        if os.path.exists(self.path):
+            os.unlink(self.path)
+
+    def test_save_writes_valid_json(self):
+        layout = self.editor._default_layout()
+        with mock.patch('game._CUSTOM_LAYOUT_PATH', self.path):
+            self.editor._save(layout)
+        with open(self.path) as f:
+            data = json.load(f)
+        self.assertIn('matrix', data)
+
+    def test_load_or_default_returns_default_when_no_file(self):
+        non_existent = self.path + '_missing'
+        with mock.patch('game._CUSTOM_LAYOUT_PATH', non_existent):
+            layout = self.editor._load_or_default()
+        self.assertIsNotNone(layout['matrix'][0][7])  # white rook at (0,7)
+
+    def test_load_or_default_loads_saved_file(self):
+        custom = self.editor._default_layout()
+        # Place a custom piece in an otherwise empty square
+        custom['matrix'][3][3] = {'piece_type': 'queen', 'color': 'white', 'has_moved': False}
+        with open(self.path, 'w') as f:
+            json.dump(custom, f)
+        with mock.patch('game._CUSTOM_LAYOUT_PATH', self.path):
+            loaded = self.editor._load_or_default()
+        self.assertEqual(loaded['matrix'][3][3]['piece_type'], 'queen')
+
+    def test_load_or_default_falls_back_on_bad_json(self):
+        with open(self.path, 'w') as f:
+            f.write('NOT JSON')
+        with mock.patch('game._CUSTOM_LAYOUT_PATH', self.path):
+            layout = self.editor._load_or_default()
+        # Should still return a valid default layout
+        self.assertEqual(layout['matrix'][0][7]['piece_type'], 'rook')
+
+
+class TestBoardLayoutEditorGeometry(unittest.TestCase):
+
+    def setUp(self):
+        self.editor = make_layout_editor()
+
+    def test_board_sq_size_is_positive(self):
+        self.assertGreater(self.editor._board_sq_size(), 0)
+
+    def test_board_sq_from_pixel_inside(self):
+        ox, oy = self.editor._board_origin()
+        sq = self.editor._board_sq_size()
+        # Centre of square (2, 3)
+        px = ox + 2 * sq + sq // 2
+        py = oy + 3 * sq + sq // 2
+        self.assertEqual(self.editor._board_sq_from_pixel(px, py), (2, 3))
+
+    def test_board_sq_from_pixel_outside(self):
+        self.assertIsNone(self.editor._board_sq_from_pixel(-10, -10))
+
+    def test_palette_rects_covers_all_combinations(self):
+        rects = self.editor._palette_rects()
+        # 2 colours × 6 piece types = 12 entries
+        self.assertEqual(len(rects), 12)
+        colors  = {c for c, _, _ in rects}
+        pieces  = {p for _, p, _ in rects}
+        self.assertEqual(colors, {'white', 'black'})
+        self.assertEqual(pieces, set(BoardLayoutEditor.PALETTE_PIECES))
+
+    def test_button_rects_has_all_buttons(self):
+        _, oy = self.editor._board_origin()
+        sq = self.editor._board_sq_size()
+        btn_y = oy + sq * 8 + self.editor.PADDING
+        rects = self.editor._button_rects(btn_y, 40)
+        self.assertIn('← Back', rects)
+        self.assertIn('Reset', rects)
+        self.assertIn('Save', rects)
+        self.assertIn('Play', rects)
+
+
+class TestBoardLayoutEditorDraw(unittest.TestCase):
+    """Smoke-test _draw() — verifies it runs without errors for various states."""
+
+    def setUp(self):
+        self.editor = make_layout_editor()
+        self.layout = self.editor._default_layout()
+        sq = self.editor._board_sq_size()
+        _, oy = self.editor._board_origin()
+        self.btn_y = oy + sq * 8 + self.editor.PADDING
+
+    def test_draw_default_layout_no_status(self):
+        self.editor._draw(self.layout, ('white', 'pawn'), (0, 0),
+                          self.btn_y, 40, '')
+
+    def test_draw_with_status_message(self):
+        self.editor._draw(self.layout, ('black', 'queen'), (0, 0),
+                          self.btn_y, 40, 'Saved!')
+
+    def test_draw_with_mouse_over_board(self):
+        ox, oy = self.editor._board_origin()
+        sq = self.editor._board_sq_size()
+        mouse = (ox + sq * 3 + sq // 2, oy + sq * 4 + sq // 2)
+        self.editor._draw(self.layout, ('white', 'rook'), mouse,
+                          self.btn_y, 40, '')
+
+    def test_draw_with_empty_layout(self):
+        empty = self.editor._default_layout()
+        for x in range(8):
+            for y in range(8):
+                empty['matrix'][x][y] = None
+        self.editor._draw(empty, ('white', 'knight'), (0, 0),
+                          self.btn_y, 40, '')
+
+    def test_draw_with_black_piece_fallback(self):
+        layout = self.editor._default_layout()
+        # Force a piece type not in piece_icons (no SVG → fallback path)
+        layout['matrix'][4][4] = {'piece_type': 'rook', 'color': 'black', 'has_moved': False}
+        # piece_icons is empty in the stub, so fallback circle+letter code runs
+        self.editor._draw(layout, ('white', 'pawn'), (0, 0),
+                          self.btn_y, 40, '')
+
+    def test_draw_selected_palette_item_highlighted(self):
+        # No assertion on pixels — just confirm no exception with selected item
+        self.editor._draw(self.layout, ('black', 'bishop'), (0, 0),
+                          self.btn_y, 40, '')
+
+    def test_draw_mouse_hover_over_palette_item(self):
+        # Hit the 'hov' branch in palette rendering (non-selected item under mouse)
+        palette_rects = self.editor._palette_rects()
+        # Hover over the second palette item while first is selected
+        selected = (palette_rects[0][0], palette_rects[0][1])
+        hover_rect = palette_rects[1][2]
+        mouse = hover_rect.center
+        self.editor._draw(self.layout, selected, mouse, self.btn_y, 40, '')
+
+    def test_draw_with_piece_icons_populated(self):
+        # Hit the 'icon' branch for both board pieces and palette items
+        dummy_icon = pygame.Surface((30, 30))
+        self.editor.piece_icons[('pawn', 'white')] = dummy_icon
+        self.editor.piece_icons[('pawn', 'black')] = dummy_icon
+        self.editor._draw(self.layout, ('white', 'pawn'), (0, 0),
+                          self.btn_y, 40, '')
+
+
+class TestBoardLayoutEditorRun(unittest.TestCase):
+    """Test the run() event loop by injecting synthetic pygame events."""
+
+    def _make_event(self, etype, **kwargs):
+        """Create a minimal pygame event object with the given attributes."""
+        ev = mock.MagicMock()
+        ev.type = etype
+        for k, v in kwargs.items():
+            setattr(ev, k, v)
+        return ev
+
+    def _run_with_events(self, events, layout_path=None):
+        """
+        Create a stub editor, patch event.get() to return `events`, then
+        return immediately after ESC is processed (the last event).
+        """
+        editor = make_layout_editor()
+        with mock.patch('game._CUSTOM_LAYOUT_PATH', layout_path or '/nonexistent/_layout.json'), \
+             mock.patch('pygame.event.get', return_value=events), \
+             mock.patch('pygame.display.update'), \
+             mock.patch.object(editor, '_draw'):
+            return editor.run()
+
+    def test_escape_key_exits_loop(self):
+        esc = self._make_event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
+        layout, saved = self._run_with_events([esc])
+        self.assertIsNone(saved)
+        self.assertIn('matrix', layout)
+
+    def test_back_button_click_exits(self):
+        editor = make_layout_editor()
+        sq = editor._board_sq_size()
+        _, oy = editor._board_origin()
+        btn_y = oy + sq * 8 + editor.PADDING
+        back_rect = editor._button_rects(btn_y, 40)['← Back']
+        ev = self._make_event(pygame.MOUSEBUTTONDOWN,
+                              pos=back_rect.center, button=1)
+        layout, saved = self._run_with_events([ev])
+        self.assertIsNone(saved)
+
+    def test_play_button_click_exits(self):
+        editor = make_layout_editor()
+        sq = editor._board_sq_size()
+        _, oy = editor._board_origin()
+        btn_y = oy + sq * 8 + editor.PADDING
+        play_rect = editor._button_rects(btn_y, 40)['Play']
+        ev = self._make_event(pygame.MOUSEBUTTONDOWN,
+                              pos=play_rect.center, button=1)
+        layout, saved = self._run_with_events([ev])
+        self.assertIsNone(saved)
+        self.assertIn('matrix', layout)
+
+    def test_reset_button_click(self):
+        editor = make_layout_editor()
+        sq = editor._board_sq_size()
+        _, oy = editor._board_origin()
+        btn_y = oy + sq * 8 + editor.PADDING
+        reset_rect = editor._button_rects(btn_y, 40)['Reset']
+        esc = self._make_event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
+        ev = self._make_event(pygame.MOUSEBUTTONDOWN,
+                              pos=reset_rect.center, button=1)
+        # Reset then ESC out
+        with mock.patch('game._CUSTOM_LAYOUT_PATH', '/nonexistent/_layout.json'), \
+             mock.patch('pygame.event.get', side_effect=[[ev], [esc]]), \
+             mock.patch('pygame.display.update'), \
+             mock.patch.object(editor, '_draw'):
+            layout, saved = editor.run()
+        self.assertIsNone(saved)
+
+    def test_save_button_click(self):
+        editor = make_layout_editor()
+        sq = editor._board_sq_size()
+        _, oy = editor._board_origin()
+        btn_y = oy + sq * 8 + editor.PADDING
+        save_rect = editor._button_rects(btn_y, 40)['Save']
+        esc = self._make_event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
+        ev = self._make_event(pygame.MOUSEBUTTONDOWN,
+                              pos=save_rect.center, button=1)
+        with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as tf:
+            path = tf.name
+        try:
+            with mock.patch('game._CUSTOM_LAYOUT_PATH', path), \
+                 mock.patch('pygame.event.get', side_effect=[[ev], [esc]]), \
+                 mock.patch('pygame.display.update'), \
+                 mock.patch.object(editor, '_draw'):
+                layout, saved = editor.run()
+            self.assertEqual(saved, path)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_left_click_on_board_places_piece(self):
+        editor = make_layout_editor()
+        sq = editor._board_sq_size()
+        ox, oy = editor._board_origin()
+        # Click on square (3, 3)
+        px = ox + 3 * sq + sq // 2
+        py = oy + 3 * sq + sq // 2
+        esc = self._make_event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
+        ev = self._make_event(pygame.MOUSEBUTTONDOWN, pos=(px, py), button=1)
+        with mock.patch('game._CUSTOM_LAYOUT_PATH', '/nonexistent/_layout.json'), \
+             mock.patch('pygame.event.get', side_effect=[[ev], [esc]]), \
+             mock.patch('pygame.display.update'), \
+             mock.patch.object(editor, '_draw'):
+            layout, _ = editor.run()
+        self.assertIsNotNone(layout['matrix'][3][3])
+        self.assertEqual(layout['matrix'][3][3]['piece_type'], 'pawn')
+
+    def test_right_click_on_board_clears_piece(self):
+        editor = make_layout_editor()
+        sq = editor._board_sq_size()
+        ox, oy = editor._board_origin()
+        # Click on square (0, 7) which has a white rook in default layout
+        px = ox + 0 * sq + sq // 2
+        py = oy + 7 * sq + sq // 2
+        esc = self._make_event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
+        ev = self._make_event(pygame.MOUSEBUTTONDOWN, pos=(px, py), button=3)
+        with mock.patch('game._CUSTOM_LAYOUT_PATH', '/nonexistent/_layout.json'), \
+             mock.patch('pygame.event.get', side_effect=[[ev], [esc]]), \
+             mock.patch('pygame.display.update'), \
+             mock.patch.object(editor, '_draw'):
+            layout, _ = editor.run()
+        self.assertIsNone(layout['matrix'][0][7])
+
+    def test_left_click_same_piece_removes_it(self):
+        """Clicking the same piece type on a square removes it."""
+        editor = make_layout_editor()
+        sq = editor._board_sq_size()
+        ox, oy = editor._board_origin()
+        # White pawn is the default selection; row 6 has white pawns
+        px = ox + 2 * sq + sq // 2
+        py = oy + 6 * sq + sq // 2
+        esc = self._make_event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
+        ev = self._make_event(pygame.MOUSEBUTTONDOWN, pos=(px, py), button=1)
+        with mock.patch('game._CUSTOM_LAYOUT_PATH', '/nonexistent/_layout.json'), \
+             mock.patch('pygame.event.get', side_effect=[[ev], [esc]]), \
+             mock.patch('pygame.display.update'), \
+             mock.patch.object(editor, '_draw'):
+            layout, _ = editor.run()
+        # The pawn at (2, 6) should now be removed
+        self.assertIsNone(layout['matrix'][2][6])
+
+    def test_palette_click_changes_selection(self):
+        """Clicking a palette item changes the selected piece."""
+        editor = make_layout_editor()
+        sq = editor._board_sq_size()
+        _, oy = editor._board_origin()
+        btn_y = oy + sq * 8 + editor.PADDING
+        # Pick the first palette entry (white king)
+        first_rect = editor._palette_rects()[0][2]
+        esc = self._make_event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
+        ev = self._make_event(pygame.MOUSEBUTTONDOWN,
+                              pos=first_rect.center, button=1)
+        # We can't inspect 'selected' directly from outside, but we confirm no error
+        with mock.patch('game._CUSTOM_LAYOUT_PATH', '/nonexistent/_layout.json'), \
+             mock.patch('pygame.event.get', side_effect=[[ev], [esc]]), \
+             mock.patch('pygame.display.update'), \
+             mock.patch.object(editor, '_draw'):
+            layout, _ = editor.run()
+        self.assertIn('matrix', layout)
+
+
+class TestBoardLayoutAppliedToBoard(unittest.TestCase):
+    """Verify that a custom layout dict can be applied to Board via from_dict."""
+
+    def test_custom_layout_loads_into_board(self):
+        editor = make_layout_editor()
+        layout = editor._default_layout()
+        # Remove all pieces from row 6 (white pawns) and add a rook at (3, 3)
+        for x in range(8):
+            layout['matrix'][x][6] = None
+        layout['matrix'][3][3] = {'piece_type': 'rook', 'color': 'white', 'has_moved': False}
+
+        board = Board()
+        board.from_dict(layout)
+
+        # White pawns on row 6 should be gone
+        for x in range(8):
+            self.assertIsNone(board.matrix[x][6].occupant)
+        # Rook placed at (3, 3)
+        rook = board.matrix[3][3].occupant
+        self.assertIsNotNone(rook)
+        self.assertEqual(rook.piece_type, 'rook')
+        self.assertEqual(rook.color, Colours.WHITE)
+
+    def test_empty_layout_loads_into_board(self):
+        editor = make_layout_editor()
+        layout = editor._default_layout()
+        for x in range(8):
+            for y in range(8):
+                layout['matrix'][x][y] = None
+
+        board = Board()
+        board.from_dict(layout)
+
+        for x in range(8):
+            for y in range(8):
+                self.assertIsNone(board.matrix[x][y].occupant)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

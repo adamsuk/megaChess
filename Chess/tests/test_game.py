@@ -2000,5 +2000,129 @@ class TestPresets(unittest.TestCase):
         self.assertTrue(board.matrix[0][0].is_hole)
 
 
+
+# ---------------------------------------------------------------------------
+# Board size resize (_resize_layout and +/- controls)
+# ---------------------------------------------------------------------------
+
+class TestResizeLayout(unittest.TestCase):
+
+    def setUp(self):
+        self.editor = make_layout_editor()
+
+    def test_resize_up_increases_board_size(self):
+        layout = self.editor._default_layout()  # 8×8
+        result = self.editor._resize_layout(layout, 10)
+        self.assertEqual(result['board_size'], 10)
+
+    def test_resize_up_matrix_dimensions(self):
+        layout = self.editor._default_layout()
+        result = self.editor._resize_layout(layout, 10)
+        self.assertEqual(len(result['matrix']), 10)
+        for col in result['matrix']:
+            self.assertEqual(len(col), 10)
+
+    def test_resize_up_preserves_existing_cells(self):
+        """Cells within the old bounds are kept."""
+        layout = self.editor._default_layout()
+        layout['matrix'][3][3] = {'piece_type': 'rook', 'color': 'white', 'has_moved': False}
+        result = self.editor._resize_layout(layout, 10)
+        self.assertIsNotNone(result['matrix'][3][3])
+        self.assertEqual(result['matrix'][3][3]['piece_type'], 'rook')
+
+    def test_resize_up_new_cells_are_none(self):
+        """Newly added cells (outside old bounds) are None."""
+        layout = self.editor._default_layout()
+        result = self.editor._resize_layout(layout, 10)
+        self.assertIsNone(result['matrix'][9][9])
+        self.assertIsNone(result['matrix'][8][0])
+        self.assertIsNone(result['matrix'][0][8])
+
+    def test_resize_down_decreases_board_size(self):
+        layout = self.editor._default_layout()
+        result = self.editor._resize_layout(layout, 6)
+        self.assertEqual(result['board_size'], 6)
+
+    def test_resize_down_matrix_dimensions(self):
+        layout = self.editor._default_layout()
+        result = self.editor._resize_layout(layout, 6)
+        self.assertEqual(len(result['matrix']), 6)
+        for col in result['matrix']:
+            self.assertEqual(len(col), 6)
+
+    def test_resize_down_preserves_inner_cells(self):
+        """Cells within the new bounds are kept when shrinking."""
+        layout = self.editor._default_layout()
+        layout['matrix'][2][2] = {'piece_type': 'queen', 'color': 'black', 'has_moved': False}
+        result = self.editor._resize_layout(layout, 6)
+        self.assertIsNotNone(result['matrix'][2][2])
+
+    def test_resize_down_drops_outer_cells(self):
+        """Cells outside the new bounds are gone after shrinking."""
+        layout = self.editor._default_layout()
+        result = self.editor._resize_layout(layout, 6)
+        self.assertEqual(len(result['matrix']), 6)
+        for col in result['matrix']:
+            self.assertEqual(len(col), 6)
+
+    def test_resize_preserves_holes(self):
+        """Hole sentinels within bounds are preserved on resize."""
+        layout = self.editor._default_layout()
+        layout['matrix'][2][2] = 'hole'
+        result = self.editor._resize_layout(layout, 10)
+        self.assertEqual(result['matrix'][2][2], 'hole')
+
+    def test_resize_resets_en_passant(self):
+        """en_passant_target and promotion_pending are reset to None on resize."""
+        layout = self.editor._default_layout()
+        layout['en_passant_target'] = [3, 5]
+        result = self.editor._resize_layout(layout, 10)
+        self.assertIsNone(result['en_passant_target'])
+
+    def test_size_rects_returns_two_rects(self):
+        minus_rect, plus_rect = self.editor._size_rects(8)
+        self.assertIsInstance(minus_rect, pygame.Rect)
+        self.assertIsInstance(plus_rect, pygame.Rect)
+
+    def test_size_rects_distinct_positions(self):
+        minus_rect, plus_rect = self.editor._size_rects(8)
+        self.assertNotEqual(minus_rect.x, plus_rect.x)
+
+    def test_plus_click_increases_size(self):
+        """Clicking + in the run loop increases board_size by 1."""
+        editor = make_layout_editor()
+        layout = editor._default_layout()  # board_size=8
+        _, plus_rect = editor._size_rects(8)
+        esc = self._make_event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
+        ev = self._make_event(pygame.MOUSEBUTTONDOWN, pos=plus_rect.center, button=1)
+        with mock.patch('game._CUSTOM_LAYOUT_PATH', '/nonexistent/_layout.json'), \
+             mock.patch('pygame.event.get', side_effect=[[ev], [esc]]), \
+             mock.patch('pygame.display.update'), \
+             mock.patch.object(editor, '_draw'):
+            result_layout, _ = editor.run()
+        self.assertEqual(result_layout['board_size'], 9)
+
+    def test_minus_click_decreases_size(self):
+        """Clicking − in the run loop decreases board_size by 1."""
+        editor = make_layout_editor()
+        layout_data = editor._default_layout()  # board_size=8
+        minus_rect, _ = editor._size_rects(8)
+        esc = self._make_event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
+        ev = self._make_event(pygame.MOUSEBUTTONDOWN, pos=minus_rect.center, button=1)
+        with mock.patch('game._CUSTOM_LAYOUT_PATH', '/nonexistent/_layout.json'), \
+             mock.patch('pygame.event.get', side_effect=[[ev], [esc]]), \
+             mock.patch('pygame.display.update'), \
+             mock.patch.object(editor, '_draw'):
+            result_layout, _ = editor.run()
+        self.assertEqual(result_layout['board_size'], 7)
+
+    def _make_event(self, etype, **kwargs):
+        ev = mock.MagicMock()
+        ev.type = etype
+        for k, v in kwargs.items():
+            setattr(ev, k, v)
+        return ev
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

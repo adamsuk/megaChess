@@ -1187,6 +1187,17 @@ class BoardLayoutEditor:
                                         'has_moved': False,
                                     }
 
+                    # Board size +/- buttons
+                    minus_rect, plus_rect = self._size_rects(board_size)
+                    if minus_rect.collidepoint(mx, my) and board_size > self.MIN_BOARD_SIZE:
+                        layout = self._resize_layout(layout, board_size - 1)
+                        status_msg = f'Board size: {board_size - 1}×{board_size - 1}'
+                        status_until = pygame.time.get_ticks() + 2000
+                    elif plus_rect.collidepoint(mx, my) and board_size < self.MAX_BOARD_SIZE:
+                        layout = self._resize_layout(layout, board_size + 1)
+                        status_msg = f'Board size: {board_size + 1}×{board_size + 1}'
+                        status_until = pygame.time.get_ticks() + 2000
+
                     # Palette click: change selection
                     for color_str, piece_type, rect in self._palette_rects(board_size):
                         if rect.collidepoint(mx, my):
@@ -1244,6 +1255,44 @@ class BoardLayoutEditor:
         _, oy = self._board_origin()
         preset_btn_h = 32
         return oy + sq * board_size + self.PADDING * 2 + preset_btn_h + 18
+
+    MIN_BOARD_SIZE = 4
+    MAX_BOARD_SIZE = 12
+
+    def _size_rects(self, board_size=8):
+        """Return (minus_rect, plus_rect) for the board-size +/- buttons in the panel."""
+        px = self._panel_x(board_size)
+        pw = self.w - px - self.PADDING
+        btn_w = 28
+        y = 44 + 6   # near top of panel, same baseline as palette header
+        minus_rect = pygame.Rect(px + pw - btn_w * 2 - 4, y, btn_w, 22)
+        plus_rect  = pygame.Rect(px + pw - btn_w,          y, btn_w, 22)
+        return minus_rect, plus_rect
+
+    @staticmethod
+    def _resize_layout(layout, new_size):
+        """
+        Return a new layout dict with board_size=new_size.
+        Cells within the new bounds are preserved; cells outside are dropped.
+        New cells (expanded rows/columns) are filled with None.
+        """
+        old_size = layout.get('board_size', 8)
+        old_matrix = layout['matrix']
+        new_matrix = []
+        for x in range(new_size):
+            col = []
+            for y in range(new_size):
+                if x < old_size and y < old_size:
+                    col.append(old_matrix[x][y])
+                else:
+                    col.append(None)
+            new_matrix.append(col)
+        return {
+            'board_size': new_size,
+            'matrix': new_matrix,
+            'en_passant_target': None,
+            'promotion_pending': None,
+        }
 
     def _preset_rects(self, btn_y, btn_h, board_size=8):
         """Return dict of preset_name → pygame.Rect, above the bottom buttons."""
@@ -1349,6 +1398,22 @@ class BoardLayoutEditor:
                          border_radius=4)
         pal_hdr = self.label_font.render('Palette', True, self.TITLE_COLOR)
         self.screen.blit(pal_hdr, (px, oy + 6))
+
+        # Board size controls: "Size: N  [−] [+]"
+        minus_rect, plus_rect = self._size_rects(board_size)
+        size_lbl = self.tiny_font.render(f'Size: {board_size}', True, self.TEXT)
+        self.screen.blit(size_lbl, size_lbl.get_rect(
+            centery=minus_rect.centery, right=minus_rect.left - 6))
+        for rect, label, enabled in [
+            (minus_rect, '−', board_size > self.MIN_BOARD_SIZE),
+            (plus_rect,  '+', board_size < self.MAX_BOARD_SIZE),
+        ]:
+            hov = rect.collidepoint(*mouse) and enabled
+            bg = self.BTN_HOV if hov else (self.BTN_BG if enabled else (45, 48, 58))
+            tc = self.TEXT if enabled else (70, 75, 85)
+            pygame.draw.rect(self.screen, bg, rect, border_radius=4)
+            t = self.label_font.render(label, True, tc)
+            self.screen.blit(t, t.get_rect(center=rect.center))
 
         for color_str, piece_type, rect in self._palette_rects(board_size):
             is_hole_entry = (color_str == 'hole')

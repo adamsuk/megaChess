@@ -500,6 +500,30 @@ _DEFAULT_PIECES_PATH = os.path.join(os.path.dirname(__file__), 'defs', 'pieces_d
 # Boolean flags that can be toggled per move_rule
 _RULE_FLAGS = ['sliding', 'directional', 'move_only', 'capture_only', 'jump_capture']
 
+# Maps keyword strings used in pieces_defs.json to explicit [dx, dy] lists
+_KEYWORD_DELTAS = {
+    'diagonal': [[1, 1], [1, -1], [-1, 1], [-1, -1]],
+    'straight': [[1, 0], [-1, 0], [0, 1], [0, -1]],
+}
+
+
+def _expand_keywords(defs):
+    """
+    Replace keyword strings ('diagonal', 'straight') in every rule's deltas
+    with their explicit [dx, dy] lists.  Called when defs are loaded into
+    the editor so all editing works on uniform lists.
+    """
+    for piece_def in defs.values():
+        for rule in piece_def.get('move_rules', []):
+            expanded = []
+            for d in rule.get('deltas', []):
+                if isinstance(d, str):
+                    expanded.extend(_KEYWORD_DELTAS.get(d, []))
+                else:
+                    expanded.append(d)
+            rule['deltas'] = expanded
+    return defs
+
 
 class PieceEditor:
     """
@@ -537,6 +561,20 @@ class PieceEditor:
     # How tall each flag toggle button is drawn / hit-tested (px)
     TOGGLE_H = 26
 
+    # Delta grid geometry
+    CELL       = 16    # grid cell size (px)
+    CELL_GAP   = 2     # gap between cells (px)
+    GRID_RANGE = 2     # grid spans ±GRID_RANGE → 5×5
+    GRID_CELLS = 5     # 2 * GRID_RANGE + 1
+    GRID_SIZE  = 90    # GRID_CELLS * (CELL + CELL_GAP)
+
+    # Y-offset within a rule block at which the flag row starts
+    # (rule label height + grid height + gap)
+    FLAG_Y_OFF = 120   # 24 + GRID_SIZE + 6
+
+    # Total vertical space allocated per rule in the right panel
+    RULE_H = 200
+
     def __init__(self):
         pygame.init()
         info = pygame.display.Info()
@@ -555,12 +593,12 @@ class PieceEditor:
         pieces_defs is the final state; saved_path is set if the user hit Save.
         """
         all_pieces = AllPieces()
-        defs = copy.deepcopy(all_pieces.pieces_defs)
+        defs = _expand_keywords(copy.deepcopy(all_pieces.pieces_defs))
         # Load any previously saved custom defs
         if os.path.exists(_CUSTOM_PIECES_PATH):
             try:
                 with open(_CUSTOM_PIECES_PATH) as f:
-                    defs = json.load(f)
+                    defs = _expand_keywords(json.load(f))
             except (OSError, json.JSONDecodeError):
                 pass
 
@@ -601,15 +639,36 @@ class PieceEditor:
                                 selected = name
                                 scroll_y = 0
 
-                    # Right panel — toggle rule flags
+                    # Right panel — delta grid, rule add/remove, flag toggles
                     elif mx >= right_x and my < btn_y:
                         if selected in defs:
-                            toggle = self._find_toggle(defs[selected], mx, my,
-                                                       right_x, right_w, scroll_y)
-                            if toggle is not None:
-                                rule_idx, flag = toggle
-                                rules = defs[selected]['move_rules']
-                                rules[rule_idx][flag] = not rules[rule_idx].get(flag, False)
+                            piece_def = defs[selected]
+                            rules = piece_def['move_rules']
+
+                            delta_hit = self._find_delta_click(
+                                piece_def, mx, my, right_x, scroll_y)
+                            if delta_hit is not None:
+                                rule_idx, dx, dy = delta_hit
+                                deltas = rules[rule_idx]['deltas']
+                                d = [dx, dy]
+                                if d in deltas:
+                                    deltas.remove(d)
+                                else:
+                                    deltas.append(d)
+                            else:
+                                remove_hit = self._find_remove_rule(
+                                    piece_def, mx, my, right_x, right_w, scroll_y)
+                                if remove_hit is not None and len(rules) > 1:
+                                    rules.pop(remove_hit)
+                                elif self._add_rule_rect(
+                                        piece_def, right_x, scroll_y).collidepoint(mx, my):
+                                    rules.append({'deltas': []})
+                                else:
+                                    toggle = self._find_toggle(
+                                        piece_def, mx, my, right_x, right_w, scroll_y)
+                                    if toggle is not None:
+                                        rule_idx, flag = toggle
+                                        rules[rule_idx][flag] = not rules[rule_idx].get(flag, False)
 
                     # Bottom buttons
                     for label, rect in self._button_rects(btn_y, btn_h).items():
@@ -624,7 +683,7 @@ class PieceEditor:
                                 status_msg = f'Cloned → {new_name}'
                                 status_until = pygame.time.get_ticks() + 2500
                             elif label == 'Reset':
-                                defs = copy.deepcopy(AllPieces().pieces_defs)
+                                defs = _expand_keywords(copy.deepcopy(AllPieces().pieces_defs))
                                 selected = list(defs.keys())[0]
                                 saved_path = None
                                 status_msg = 'Reset to defaults'
@@ -640,7 +699,14 @@ class PieceEditor:
                                 return defs, saved_path
 
                 if event.type == locals.MOUSEWHEEL:
-                    scroll_y = max(0, scroll_y - event.y * 20)
+                    if selected in defs:
+                        n_rules = len(defs[selected].get('move_rules', []))
+                        content_h = 32 + n_rules * self.RULE_H + 40
+                        visible_h = btn_y - 55
+                        max_scroll = max(0, content_h - visible_h)
+                    else:
+                        max_scroll = 0
+                    scroll_y = max(0, min(scroll_y - event.y * 20, max_scroll))
 
             self._draw(defs, selected, piece_names, left_w, right_x, right_w,
                        btn_y, btn_h, mouse, scroll_y,
@@ -674,14 +740,49 @@ class PieceEditor:
         rects = {}
         x = right_x
         tw = 116
+        # Flags live below the delta grid — use FLAG_Y_OFF instead of 24
+        base_y = rule_y + self.FLAG_Y_OFF
         for flag in _RULE_FLAGS:
-            rect = pygame.Rect(x, rule_y + 24, tw - 4, self.TOGGLE_H)
+            rect = pygame.Rect(x, base_y, tw - 4, self.TOGGLE_H)
             rects[flag] = rect
             x += tw
             if x + tw > right_x + right_w:
                 x = right_x
-                rule_y += self.TOGGLE_H + 6
+                base_y += self.TOGGLE_H + 6
         return rects
+
+    def _delta_grid_rects(self, rule_y, right_x):
+        """
+        Returns {(dx, dy): pygame.Rect} for the 5×5 delta-choice grid.
+        (0, 0) — the piece's own square — is excluded.
+        """
+        rects = {}
+        step = self.CELL + self.CELL_GAP
+        grid_top  = rule_y + 24
+        grid_left = right_x
+        for col in range(self.GRID_CELLS):
+            dx = col - self.GRID_RANGE
+            for row in range(self.GRID_CELLS):
+                dy = row - self.GRID_RANGE
+                if dx == 0 and dy == 0:
+                    continue
+                rects[(dx, dy)] = pygame.Rect(
+                    grid_left + col * step,
+                    grid_top  + row * step,
+                    self.CELL,
+                    self.CELL,
+                )
+        return rects
+
+    def _remove_rule_rect(self, rule_y, right_x, right_w):
+        """Small '×' button at the top-right of a rule block."""
+        return pygame.Rect(right_x + right_w - 24, rule_y + 2, 22, 18)
+
+    def _add_rule_rect(self, piece_def, right_x, scroll_y):
+        """'+ Add Rule' button positioned below the last rule."""
+        n = len(piece_def.get('move_rules', []))
+        y = 92 - scroll_y + n * self.RULE_H
+        return pygame.Rect(right_x, y, 110, 24)
 
     def _find_toggle(self, piece_def, mx, my, right_x, right_w, scroll_y):
         """Return (rule_idx, flag) if the click / hover lands on a toggle, else None."""
@@ -692,7 +793,26 @@ class PieceEditor:
             for flag, rect in toggle_rects.items():
                 if rect.collidepoint(mx, my):
                     return (i, flag)
-            y += 80
+            y += self.RULE_H
+        return None
+
+    def _find_delta_click(self, piece_def, mx, my, right_x, scroll_y):
+        """Return (rule_idx, dx, dy) if the click lands on a delta grid cell, else None."""
+        y = 92 - scroll_y
+        for i, rule in enumerate(piece_def.get('move_rules', [])):
+            for (dx, dy), rect in self._delta_grid_rects(y, right_x).items():
+                if rect.collidepoint(mx, my):
+                    return (i, dx, dy)
+            y += self.RULE_H
+        return None
+
+    def _find_remove_rule(self, piece_def, mx, my, right_x, right_w, scroll_y):
+        """Return rule index if the click lands on a remove-rule button, else None."""
+        y = 92 - scroll_y
+        for i in range(len(piece_def.get('move_rules', []))):
+            if self._remove_rule_rect(y, right_x, right_w).collidepoint(mx, my):
+                return i
+            y += self.RULE_H
         return None
 
     # ------------------------------------------------------------------
@@ -730,7 +850,10 @@ class PieceEditor:
         clip = pygame.Rect(right_x - self.PADDING, 55, right_w + self.PADDING, btn_y - 60)
         self.screen.set_clip(clip)
 
-        hovered_flag = None
+        hovered_flag  = None
+        hovered_delta = None
+        step = self.CELL + self.CELL_GAP
+
         if selected and selected in defs:
             piece_def = defs[selected]
             y = 60 - scroll_y
@@ -739,13 +862,43 @@ class PieceEditor:
             y += 32
 
             for i, rule in enumerate(piece_def.get('move_rules', [])):
-                rule_label = self.small_font.render(f'Rule {i + 1}  deltas: {rule.get("deltas", [])}',
-                                                    True, self.DIM_TEXT)
-                self.screen.blit(rule_label, (right_x, y))
+                # ── Rule label + remove button ────────────────────────────
+                lbl_txt = self.small_font.render(f'Rule {i + 1}', True, self.DIM_TEXT)
+                self.screen.blit(lbl_txt, (right_x, y + 4))
 
+                rm_rect = self._remove_rule_rect(y, right_x, right_w)
+                rm_hov  = rm_rect.collidepoint(*mouse)
+                rm_bg   = (180, 65, 65) if rm_hov else (110, 45, 45)
+                pygame.draw.rect(self.screen, rm_bg, rm_rect, border_radius=3)
+                rm_lbl = self.tiny_font.render('×', True, (240, 200, 200))
+                self.screen.blit(rm_lbl, rm_lbl.get_rect(center=rm_rect.center))
+
+                # ── Delta grid ────────────────────────────────────────────
+                active_deltas = {tuple(d) for d in rule.get('deltas', [])
+                                 if isinstance(d, (list, tuple))}
+                # Centre cell (0,0): the piece's own square — always disabled
+                cx = right_x + self.GRID_RANGE * step
+                cy = y + 24 + self.GRID_RANGE * step
+                pygame.draw.rect(self.screen, (50, 53, 68),
+                                 pygame.Rect(cx, cy, self.CELL, self.CELL))
+
+                for (dx, dy), rect in self._delta_grid_rects(y, right_x).items():
+                    is_active = (dx, dy) in active_deltas
+                    is_hov    = rect.collidepoint(*mouse)
+                    if is_hov:
+                        hovered_delta = (dx, dy)
+                    bg = self.ON_COLOR if is_active else self.OFF_COLOR
+                    if is_hov:
+                        bg = tuple(min(c + 40, 255) for c in bg)
+                    pygame.draw.rect(self.screen, bg, rect, border_radius=2)
+                    if is_hov:
+                        pygame.draw.rect(self.screen, (220, 225, 235),
+                                         rect, width=1, border_radius=2)
+
+                # ── Flag toggles (below the grid) ────────────────────────
                 toggle_rects = self._rule_toggle_rects(rule, y, right_x, right_w)
                 for flag, rect in toggle_rects.items():
-                    val = rule.get(flag, False)
+                    val    = rule.get(flag, False)
                     is_hov = rect.collidepoint(*mouse)
                     if is_hov:
                         hovered_flag = flag
@@ -753,19 +906,34 @@ class PieceEditor:
                     if is_hov:
                         bg = tuple(min(c + 30, 255) for c in bg)
                     pygame.draw.rect(self.screen, bg, rect, border_radius=4)
-                    # White border on hover so it's obvious it's clickable
                     if is_hov:
-                        pygame.draw.rect(self.screen, (220, 225, 235), rect, width=1, border_radius=4)
-                    ft = self.tiny_font.render(flag, True, (10, 10, 10) if val else (160, 165, 175))
+                        pygame.draw.rect(self.screen, (220, 225, 235),
+                                         rect, width=1, border_radius=4)
+                    ft = self.tiny_font.render(flag, True,
+                                              (10, 10, 10) if val else (160, 165, 175))
                     self.screen.blit(ft, ft.get_rect(center=rect.center))
-                y += 80
+
+                y += self.RULE_H
+
+            # ── Add Rule button ───────────────────────────────────────────
+            add_rect = self._add_rule_rect(piece_def, right_x, scroll_y)
+            add_hov  = add_rect.collidepoint(*mouse)
+            add_bg   = (60, 105, 140) if add_hov else (45, 78, 105)
+            pygame.draw.rect(self.screen, add_bg, add_rect, border_radius=4)
+            add_lbl = self.small_font.render('+ Add Rule', True, self.TEXT)
+            self.screen.blit(add_lbl, add_lbl.get_rect(center=add_rect.center))
 
         self.screen.set_clip(None)
 
-        # Tooltip: description of the currently hovered flag
+        # ── Tooltip ───────────────────────────────────────────────────────
+        tooltip = None
         if hovered_flag and hovered_flag in self.FLAG_DESCRIPTIONS:
-            desc = self.FLAG_DESCRIPTIONS[hovered_flag]
-            tip_surf = self.tiny_font.render(desc, True, (220, 225, 235))
+            tooltip = self.FLAG_DESCRIPTIONS[hovered_flag]
+        elif hovered_delta:
+            dx, dy = hovered_delta
+            tooltip = f'delta ({dx:+d}, {dy:+d})  — click to toggle this move direction'
+        if tooltip:
+            tip_surf = self.tiny_font.render(tooltip, True, (220, 225, 235))
             tip_bg = pygame.Rect(0, 0, tip_surf.get_width() + 12, tip_surf.get_height() + 8)
             tx = max(right_x, min(mouse[0], self.w - tip_bg.width - 4))
             ty = min(mouse[1] + 18, btn_y - tip_bg.height - 4)

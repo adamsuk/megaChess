@@ -556,6 +556,195 @@ class TestSaveLoad(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# PieceEditor delta editing
+# ---------------------------------------------------------------------------
+
+class TestPieceEditorDeltas(unittest.TestCase):
+
+    def _make_editor(self):
+        from game import PieceEditor
+        ed = object.__new__(PieceEditor)
+        ed.w = 640
+        ed.h = 640
+        ed.PADDING    = PieceEditor.PADDING
+        ed.TOGGLE_H   = PieceEditor.TOGGLE_H
+        ed.CELL       = PieceEditor.CELL
+        ed.CELL_GAP   = PieceEditor.CELL_GAP
+        ed.GRID_RANGE = PieceEditor.GRID_RANGE
+        ed.GRID_CELLS = PieceEditor.GRID_CELLS
+        ed.GRID_SIZE  = PieceEditor.GRID_SIZE
+        ed.FLAG_Y_OFF = PieceEditor.FLAG_Y_OFF
+        ed.RULE_H     = PieceEditor.RULE_H
+        return ed
+
+    # ── keyword expansion ───────────────────────────────────────────────
+
+    def test_expand_keywords_diagonal(self):
+        from game import _expand_keywords
+        defs = {'p': {'move_rules': [{'deltas': ['diagonal']}]}}
+        _expand_keywords(defs)
+        self.assertEqual(sorted(defs['p']['move_rules'][0]['deltas']),
+                         sorted([[1,1],[1,-1],[-1,1],[-1,-1]]))
+
+    def test_expand_keywords_straight(self):
+        from game import _expand_keywords
+        defs = {'p': {'move_rules': [{'deltas': ['straight']}]}}
+        _expand_keywords(defs)
+        self.assertEqual(sorted(defs['p']['move_rules'][0]['deltas']),
+                         sorted([[1,0],[-1,0],[0,1],[0,-1]]))
+
+    def test_expand_keywords_mixed(self):
+        from game import _expand_keywords
+        defs = {'p': {'move_rules': [{'deltas': ['diagonal', [0, 1]]}]}}
+        _expand_keywords(defs)
+        result = defs['p']['move_rules'][0]['deltas']
+        self.assertEqual(len(result), 5)
+        self.assertIn([0, 1], result)
+
+    def test_expand_keywords_no_keywords(self):
+        from game import _expand_keywords
+        orig = [[1, 0], [-1, 0]]
+        defs = {'p': {'move_rules': [{'deltas': list(orig)}]}}
+        _expand_keywords(defs)
+        self.assertEqual(defs['p']['move_rules'][0]['deltas'], orig)
+
+    def test_expand_keywords_returns_defs(self):
+        from game import _expand_keywords
+        defs = {'p': {'move_rules': []}}
+        result = _expand_keywords(defs)
+        self.assertIs(result, defs)
+
+    # ── delta grid geometry ────────────────────────────────────────────
+
+    def test_delta_grid_rects_excludes_origin(self):
+        ed = self._make_editor()
+        rects = ed._delta_grid_rects(rule_y=100, right_x=220)
+        self.assertNotIn((0, 0), rects)
+
+    def test_delta_grid_rects_count(self):
+        ed = self._make_editor()
+        rects = ed._delta_grid_rects(rule_y=100, right_x=220)
+        expected = ed.GRID_CELLS ** 2 - 1   # 24
+        self.assertEqual(len(rects), expected)
+
+    def test_delta_grid_rects_all_ranges(self):
+        ed = self._make_editor()
+        rects = ed._delta_grid_rects(rule_y=100, right_x=220)
+        gr = ed.GRID_RANGE
+        for dx in range(-gr, gr + 1):
+            for dy in range(-gr, gr + 1):
+                if dx == 0 and dy == 0:
+                    continue
+                self.assertIn((dx, dy), rects)
+
+    def test_delta_grid_rects_top_left_corner(self):
+        """(-GRID_RANGE, -GRID_RANGE) cell should start at (right_x, rule_y+24)."""
+        ed = self._make_editor()
+        rule_y, right_x = 100, 220
+        rects = ed._delta_grid_rects(rule_y, right_x)
+        gr = ed.GRID_RANGE
+        rect = rects[(-gr, -gr)]
+        self.assertEqual(rect.left, right_x)
+        self.assertEqual(rect.top,  rule_y + 24)
+
+    def test_delta_grid_rects_cell_size(self):
+        ed = self._make_editor()
+        rects = ed._delta_grid_rects(rule_y=0, right_x=0)
+        for rect in rects.values():
+            self.assertEqual(rect.width,  ed.CELL)
+            self.assertEqual(rect.height, ed.CELL)
+
+    # ── find_delta_click ──────────────────────────────────────────────
+
+    def test_find_delta_click_hit(self):
+        ed = self._make_editor()
+        rule = {'deltas': [], 'sliding': False}
+        piece_def = {'move_rules': [rule]}
+        right_x, scroll_y = 220, 0
+        # First rule_y = 92 - 0 = 92; grid top = 92 + 24 = 116
+        # (-2, -2) cell: col=0, row=0 → x=right_x, y=116
+        rect = ed._delta_grid_rects(92, right_x)[(-2, -2)]
+        result = ed._find_delta_click(piece_def, rect.centerx, rect.centery,
+                                      right_x, scroll_y)
+        self.assertEqual(result, (0, -2, -2))
+
+    def test_find_delta_click_origin_returns_none(self):
+        """Clicking (0,0) must return None since origin is excluded from rects."""
+        ed = self._make_editor()
+        piece_def = {'move_rules': [{'deltas': []}]}
+        right_x, scroll_y = 220, 0
+        step = ed.CELL + ed.CELL_GAP
+        # origin pixel centre
+        ox = right_x + ed.GRID_RANGE * step + ed.CELL // 2
+        oy = 92 + 24 + ed.GRID_RANGE * step + ed.CELL // 2
+        result = ed._find_delta_click(piece_def, ox, oy, right_x, scroll_y)
+        self.assertIsNone(result)
+
+    def test_find_delta_click_second_rule(self):
+        """Clicks on the second rule's grid return rule_idx=1."""
+        ed = self._make_editor()
+        piece_def = {'move_rules': [{'deltas': []}, {'deltas': []}]}
+        right_x, scroll_y = 220, 0
+        rule1_y = 92 + ed.RULE_H  # second rule starts here
+        rect = ed._delta_grid_rects(rule1_y, right_x)[(1, 1)]
+        result = ed._find_delta_click(piece_def, rect.centerx, rect.centery,
+                                      right_x, scroll_y)
+        self.assertEqual(result, (1, 1, 1))
+
+    def test_find_delta_click_y_matches_draw(self):
+        """Regression: first rule grid top = 92 + 24 (not 60 + 24 or other offset)."""
+        ed = self._make_editor()
+        piece_def = {'move_rules': [{'deltas': []}]}
+        right_x, scroll_y = 220, 0
+        grid_top = 92 + 24   # same as _draw: header=32 + rule_label=24
+        # Click at top-left cell of grid
+        result = ed._find_delta_click(piece_def,
+                                      right_x + 1, grid_top + 1,
+                                      right_x, scroll_y)
+        self.assertIsNotNone(result, 'Delta not detected at expected draw position')
+
+    # ── delta toggle logic ────────────────────────────────────────────
+
+    def test_toggle_delta_adds(self):
+        rule = {'deltas': []}
+        rule['deltas'].append([1, 0])
+        self.assertIn([1, 0], rule['deltas'])
+
+    def test_toggle_delta_removes(self):
+        rule = {'deltas': [[1, 0], [0, 1]]}
+        rule['deltas'].remove([1, 0])
+        self.assertNotIn([1, 0], rule['deltas'])
+        self.assertIn([0, 1], rule['deltas'])
+
+    # ── flag y-offset ─────────────────────────────────────────────────
+
+    def test_flags_appear_below_grid(self):
+        """Flag toggles must start at rule_y + FLAG_Y_OFF, not rule_y + 24."""
+        ed = self._make_editor()
+        rule_y, right_x, right_w = 100, 220, 400
+        rects = ed._rule_toggle_rects({}, rule_y, right_x, right_w)
+        # All flag rects must start at or after rule_y + FLAG_Y_OFF
+        for rect in rects.values():
+            self.assertGreaterEqual(rect.top, rule_y + ed.FLAG_Y_OFF)
+
+    def test_find_toggle_uses_rule_h_step(self):
+        """_find_toggle must step by RULE_H between rules (not the old 80px)."""
+        ed = self._make_editor()
+        rule = {f: False for f in ['sliding','directional','move_only',
+                                   'capture_only','jump_capture']}
+        piece_def = {'move_rules': [rule, dict(rule)]}
+        right_x, right_w, scroll_y = 220, 400, 0
+        # First rule flags start at 92 + FLAG_Y_OFF
+        # Second rule flags start at 92 + RULE_H + FLAG_Y_OFF
+        second_flag_top = 92 + ed.RULE_H + ed.FLAG_Y_OFF
+        result = ed._find_toggle(piece_def,
+                                 right_x + 5, second_flag_top + 5,
+                                 right_x, right_w, scroll_y)
+        self.assertIsNotNone(result)
+        self.assertEqual(result[0], 1)   # second rule
+
+
+# ---------------------------------------------------------------------------
 # PieceEditor._button_rects
 # ---------------------------------------------------------------------------
 
@@ -613,23 +802,18 @@ class TestPieceEditorButtons(unittest.TestCase):
             self.assertEqual(rects[flag].height, PieceEditor.TOGGLE_H)
 
     def test_find_toggle_y_matches_draw_offset(self):
-        """_find_toggle must use y=92-scroll_y to align with _draw which adds 32 for header."""
+        """_find_toggle flags must now sit at rule_y + FLAG_Y_OFF (below the delta grid)."""
         from game import PieceEditor, _RULE_FLAGS
         ed = self._make_editor()
-        # Build a minimal piece def with one rule that has all flags
         rule = {flag: False for flag in _RULE_FLAGS}
         rule['deltas'] = [[0, 1]]
         piece_def = {'move_rules': [rule]}
-        # Compute where the first toggle row is drawn in _draw:
-        # y = 60 (initial) + 32 (header) = 92; toggle top = 92 + 24 = 116
-        right_x = 220
-        right_w = 400
-        scroll_y = 0
-        draw_toggle_top = 92 + 24  # = 116
-        # A click at (right_x + 5, draw_toggle_top + 5) must be detected
+        right_x, right_w, scroll_y = 220, 400, 0
+        # rule_y = 92; flags now start at rule_y + FLAG_Y_OFF
+        draw_toggle_top = 92 + PieceEditor.FLAG_Y_OFF
         result = ed._find_toggle(piece_def, right_x + 5, draw_toggle_top + 5,
                                  right_x, right_w, scroll_y)
-        self.assertIsNotNone(result, 'Toggle not detected at drawn position — offset bug!')
+        self.assertIsNotNone(result, 'Toggle not detected — FLAG_Y_OFF mismatch!')
 
     def test_all_flags_have_descriptions(self):
         from game import PieceEditor, _RULE_FLAGS

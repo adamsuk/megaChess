@@ -80,6 +80,7 @@ class Game:
                         self.load()
                     elif self.graphics.hints_btn_rect.collidepoint(px, py):
                         self._toggle_hints()
+                    self.click = False  # consumed; don't treat as a board click
                     continue
 
                 # Promotion picker takes priority over all other board input

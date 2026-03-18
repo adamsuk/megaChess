@@ -42,6 +42,7 @@ class Game:
     def setup(self):
         """Draws the window and board at the beginning of the game"""
         self.graphics.setup_window()
+        self.graphics.set_board_size(self.board.board_size)
         self.graphics.load_piece_icons(self.board.pieces_defs)
 
     def event_loop(self):
@@ -220,7 +221,8 @@ class Graphics:
             (self.window_size, self.window_size + self.button_bar_height)
         )
 
-        self.square_size = self.window_size // 8
+        self.board_size = 8
+        self.square_size = self.window_size // self.board_size
         self.piece_size = self.square_size // 2
         self.piece_font = pygame.font.SysFont(None, self.piece_size)
 
@@ -266,6 +268,13 @@ class Graphics:
                     self.piece_icons[(piece_type, color_name)] = render_svg(svg, (px, px))
                 except Exception:
                     pass
+
+    def set_board_size(self, n):
+        """Update rendering parameters when the board changes size."""
+        self.board_size = n
+        self.square_size = self.window_size // n
+        self.piece_size = self.square_size // 2
+        self.piece_font = pygame.font.SysFont(None, self.piece_size)
 
     def setup_window(self):
         """
@@ -366,8 +375,8 @@ class Graphics:
         Hole squares are drawn in HOLE grey with a darker inset for a sunken look.
         """
         sq = self.square_size
-        for x in xrange(8):
-            for y in xrange(8):
+        for x in xrange(self.board_size):
+            for y in xrange(self.board_size):
                 sq_obj = board.matrix[int(x)][int(y)]
                 pygame.draw.rect(self.screen, sq_obj.color,
                                  (x * sq, y * sq, sq, sq))
@@ -383,8 +392,8 @@ class Graphics:
         Uses icon images when available, falls back to circle+letter otherwise.
         """
         piece_labels = {'pawn': 'P', 'rook': 'R', 'knight': 'N', 'bishop': 'B', 'queen': 'Q', 'king': 'K'}
-        for x in xrange(8):
-            for y in xrange(8):
+        for x in xrange(self.board_size):
+            for y in xrange(self.board_size):
                 piece = board.matrix[int(x)][int(y)].occupant
                 if piece is not None:
                     center = self.pixel_coords((x, y))
@@ -413,8 +422,9 @@ class Graphics:
         Does the reverse of pixel_coords(). Takes in a tuple of of pixel coordinates and returns what square they are in.
         """
         pixel_x, pixel_y = pixel_coords_tuple
-        x = min(max(pixel_x // self.square_size, 0), 7)
-        y = min(max(pixel_y // self.square_size, 0), 7)
+        N = self.board_size - 1
+        x = min(max(pixel_x // self.square_size, 0), N)
+        y = min(max(pixel_y // self.square_size, 0), N)
         return (x, y)
 
     def highlight_squares(self, squares, origin):
@@ -457,24 +467,29 @@ class Graphics:
 
     # Board columns used for the promotion picker (centred on the board)
     PROMOTION_PIECES = ['queen', 'rook', 'bishop', 'knight']
-    PROMOTION_COLS   = [2, 3, 4, 5]   # x indices; row is always 3 (middle)
-    PROMOTION_ROW    = 3
+
+    def _promotion_cols_row(self):
+        """Return (cols_list, row) centred on the current board."""
+        start = (self.board_size - 4) // 2
+        cols = [start + i for i in range(4)]
+        row = self.board_size // 2 - 1
+        return cols, row
 
     def draw_promotion_picker(self, color_key):
         """
         Draws a centred 4-square overlay letting the player pick a promotion piece.
         The four choices are queen / rook / bishop / knight.
         """
-        row = self.PROMOTION_ROW
+        cols, row = self._promotion_cols_row()
         # Dark border behind the four squares
-        border_x = self.PROMOTION_COLS[0] * self.square_size - 4
+        border_x = cols[0] * self.square_size - 4
         border_y = row * self.square_size - 4
-        border_w = len(self.PROMOTION_COLS) * self.square_size + 8
+        border_w = len(cols) * self.square_size + 8
         border_h = self.square_size + 8
         pygame.draw.rect(self.screen, Colours.BLACK,
                          (border_x, border_y, border_w, border_h), border_radius=6)
 
-        for piece_type, col in zip(self.PROMOTION_PIECES, self.PROMOTION_COLS):
+        for piece_type, col in zip(self.PROMOTION_PIECES, cols):
             sx = col * self.square_size
             sy = row * self.square_size
             pygame.draw.rect(self.screen, Colours.HIGH,
@@ -493,10 +508,11 @@ class Graphics:
         Returns the piece type the player clicked in the promotion picker, or None.
         mouse_pos is in board coordinates (col, row).
         """
+        cols, promo_row = self._promotion_cols_row()
         mx, my = mouse_pos
-        if my != self.PROMOTION_ROW:
+        if my != promo_row:
             return None
-        for piece_type, col in zip(self.PROMOTION_PIECES, self.PROMOTION_COLS):
+        for piece_type, col in zip(self.PROMOTION_PIECES, cols):
             if mx == col:
                 return piece_type
         return None
@@ -1020,7 +1036,7 @@ class BoardLayoutEditor:
 
         # Piece icon rendering (for palette + board preview)
         pieces_defs = AllPieces().pieces_defs
-        sq = self._board_sq_size()
+        sq = self._board_sq_size(8)  # icons always cached at standard 8×8 size
         self.piece_icons = {}
         icon_colours = {
             'white': {'fill': '#F0F0E6', 'stroke': '#3C3C3C'},
@@ -1047,40 +1063,40 @@ class BoardLayoutEditor:
     # Geometry
     # ------------------------------------------------------------------
 
-    def _board_sq_size(self):
+    def _board_sq_size(self, board_size=8):
         """Size of each board square in pixels."""
         board_area = self.w * 3 // 4   # board uses left 3/4 of the window
-        return board_area // 8
+        return board_area // board_size
 
     def _board_origin(self):
         """Top-left pixel corner of the board."""
         return (0, 44)
 
-    def _panel_x(self):
-        sq = self._board_sq_size()
+    def _panel_x(self, board_size=8):
+        sq = self._board_sq_size(board_size)
         ox, _ = self._board_origin()
-        return ox + sq * 8 + self.PADDING
+        return ox + sq * board_size + self.PADDING
 
-    def _board_sq_rect(self, x, y):
-        sq = self._board_sq_size()
+    def _board_sq_rect(self, x, y, board_size=8):
+        sq = self._board_sq_size(board_size)
         ox, oy = self._board_origin()
         return pygame.Rect(ox + x * sq, oy + y * sq, sq, sq)
 
-    def _board_sq_from_pixel(self, px, py):
+    def _board_sq_from_pixel(self, px, py, board_size=8):
         """Return (x, y) board coordinate for pixel (px, py), or None if outside."""
-        sq = self._board_sq_size()
+        sq = self._board_sq_size(board_size)
         ox, oy = self._board_origin()
         bx = (px - ox) // sq
         by = (py - oy) // sq
-        if 0 <= bx < 8 and 0 <= by < 8:
+        if 0 <= bx < board_size and 0 <= by < board_size:
             return (bx, by)
         return None
 
-    def _palette_rects(self):
+    def _palette_rects(self, board_size=8):
         """Return list of (color_str, piece_type, pygame.Rect) for the palette.
         The last entry is the hole tool: ('hole', 'hole', rect).
         """
-        px = self._panel_x()
+        px = self._panel_x(board_size)
         pw = self.w - px - self.PADDING
         item_h = 30
         gap    = 4
@@ -1097,10 +1113,10 @@ class BoardLayoutEditor:
         rects.append(('hole', 'hole', pygame.Rect(px, y, pw, item_h)))
         return rects
 
-    def _button_rects(self, btn_y, btn_h):
+    def _button_rects(self, btn_y, btn_h, board_size=8):
         labels = ['← Back', 'Reset', 'Save', 'Play']
-        sq = self._board_sq_size()
-        total_w = sq * 8   # buttons span the board width
+        sq = self._board_sq_size(board_size)
+        total_w = sq * board_size   # buttons span the board width
         bw = (total_w - self.PADDING * (len(labels) - 1)) // len(labels)
         ox, _ = self._board_origin()
         rects = {}
@@ -1128,11 +1144,11 @@ class BoardLayoutEditor:
         clock = pygame.time.Clock()
 
         while True:
+            board_size = layout.get('board_size', 8)
             mouse = pygame.mouse.get_pos()
-            sq = self._board_sq_size()
             _, oy = self._board_origin()
             btn_h  = 40
-            btn_y  = oy + sq * 8 + self.PADDING
+            btn_y  = self._btn_y(board_size)
 
             for event in pygame.event.get():
                 if event.type == locals.QUIT:
@@ -1146,7 +1162,7 @@ class BoardLayoutEditor:
                     mx, my = event.pos
 
                     # Board click: place/remove piece or toggle hole
-                    sq_coord = self._board_sq_from_pixel(mx, my)
+                    sq_coord = self._board_sq_from_pixel(mx, my, board_size)
                     if sq_coord is not None:
                         bx, by = sq_coord
                         cell = layout['matrix'][bx][by]
@@ -1172,12 +1188,19 @@ class BoardLayoutEditor:
                                     }
 
                     # Palette click: change selection
-                    for color_str, piece_type, rect in self._palette_rects():
+                    for color_str, piece_type, rect in self._palette_rects(board_size):
                         if rect.collidepoint(mx, my):
                             selected = 'hole' if color_str == 'hole' else (color_str, piece_type)
 
+                    # Preset button clicks
+                    for preset_name, rect in self._preset_rects(btn_y, btn_h, board_size).items():
+                        if rect.collidepoint(mx, my):
+                            layout = self._make_preset(preset_name)
+                            status_msg = f'Loaded preset: {preset_name}'
+                            status_until = pygame.time.get_ticks() + 2500
+
                     # Button clicks
-                    for label, rect in self._button_rects(btn_y, btn_h).items():
+                    for label, rect in self._button_rects(btn_y, btn_h, board_size).items():
                         if rect.collidepoint(mx, my):
                             if label == '← Back':
                                 return layout, saved_path
@@ -1205,14 +1228,37 @@ class BoardLayoutEditor:
 
     def _default_layout(self):
         """Return the standard chess starting position as a layout dict."""
-        back_rank = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook']
-        matrix = [[None] * 8 for _ in range(8)]
-        for x in range(8):
-            matrix[x][0] = {'piece_type': back_rank[x], 'color': 'black', 'has_moved': False}
-            matrix[x][1] = {'piece_type': 'pawn',        'color': 'black', 'has_moved': False}
-            matrix[x][6] = {'piece_type': 'pawn',        'color': 'white', 'has_moved': False}
-            matrix[x][7] = {'piece_type': back_rank[x],  'color': 'white', 'has_moved': False}
-        return {'matrix': matrix, 'en_passant_target': None, 'promotion_pending': None}
+        return _preset_standard()
+
+    def _make_preset(self, name):
+        """Return a preset layout dict by name."""
+        if name == 'Triangle 8×8':
+            return _preset_triangle()
+        elif name == 'Hexagon 12×12':
+            return _preset_hexagon()
+        return _preset_standard()
+
+    def _btn_y(self, board_size=8):
+        """Return the y-pixel of the action buttons row (consistent with run())."""
+        sq = self._board_sq_size(board_size)
+        _, oy = self._board_origin()
+        preset_btn_h = 32
+        return oy + sq * board_size + self.PADDING * 2 + preset_btn_h + 18
+
+    def _preset_rects(self, btn_y, btn_h, board_size=8):
+        """Return dict of preset_name → pygame.Rect, above the bottom buttons."""
+        names = ['Standard 8×8', 'Triangle 8×8', 'Hexagon 12×12']
+        sq = self._board_sq_size(board_size)
+        ox, _ = self._board_origin()
+        total_w = sq * board_size
+        preset_btn_h = 32
+        preset_y = btn_y - preset_btn_h - self.PADDING
+        bw = (total_w - self.PADDING * (len(names) - 1)) // len(names)
+        rects = {}
+        for i, name in enumerate(names):
+            x = ox + i * (bw + self.PADDING)
+            rects[name] = pygame.Rect(x, preset_y, bw, preset_btn_h)
+        return rects
 
     def _load_or_default(self):
         if os.path.exists(_CUSTOM_LAYOUT_PATH):
@@ -1233,6 +1279,7 @@ class BoardLayoutEditor:
     # ------------------------------------------------------------------
 
     def _draw(self, layout, selected, mouse, btn_y, btn_h, status_msg):
+        board_size = layout.get('board_size', 8)
         self.screen.fill(self.BG)
 
         # Title
@@ -1240,21 +1287,21 @@ class BoardLayoutEditor:
         self.screen.blit(title, (self.PADDING, 8))
         hint = self.tiny_font.render('Left-click: place  •  Right-click: clear  •  Esc: back',
                                      True, self.DIM_TEXT)
-        self.screen.blit(hint, (self._panel_x(), 8))
+        self.screen.blit(hint, (self._panel_x(board_size), 8))
 
-        sq = self._board_sq_size()
+        sq = self._board_sq_size(board_size)
         ox, oy = self._board_origin()
 
         # Board squares
-        for x in range(8):
-            for y in range(8):
+        for x in range(board_size):
+            for y in range(board_size):
                 cell = layout['matrix'][x][y]
                 if cell == 'hole':
                     base_color = Colours.HOLE
                 else:
                     base_color = self.CREAM if (x + y) % 2 == 0 else self.BROWN
-                rect = self._board_sq_rect(x, y)
-                sq_coord = self._board_sq_from_pixel(*mouse)
+                rect = self._board_sq_rect(x, y, board_size)
+                sq_coord = self._board_sq_from_pixel(*mouse, board_size)
                 if sq_coord == (x, y) and cell != 'hole':
                     base_color = tuple(min(c + 30, 255) for c in base_color)
                 pygame.draw.rect(self.screen, base_color, rect)
@@ -1267,17 +1314,18 @@ class BoardLayoutEditor:
         # Board pieces
         piece_labels = {'pawn': 'P', 'rook': 'R', 'knight': 'N',
                         'bishop': 'B', 'queen': 'Q', 'king': 'K'}
-        for x in range(8):
-            for y in range(8):
+        for x in range(board_size):
+            for y in range(board_size):
                 cell = layout['matrix'][x][y]
                 if cell is None or cell == 'hole':
                     continue
-                rect = self._board_sq_rect(x, y)
+                rect = self._board_sq_rect(x, y, board_size)
                 cx, cy = rect.centerx, rect.centery
                 color_key = cell['color']
                 icon = self.piece_icons.get((cell['piece_type'], color_key))
                 if icon:
-                    self.screen.blit(icon, icon.get_rect(center=(cx, cy)))
+                    icon_scaled = pygame.transform.smoothscale(icon, (sq - 6, sq - 6))
+                    self.screen.blit(icon_scaled, icon_scaled.get_rect(center=(cx, cy)))
                 else:
                     c = Colours.WHITE if color_key == 'white' else Colours.PIECE_BLACK
                     r = sq // 2 - 2
@@ -1290,10 +1338,10 @@ class BoardLayoutEditor:
 
         # Board border
         pygame.draw.rect(self.screen, (80, 85, 100),
-                         pygame.Rect(ox, oy, sq * 8, sq * 8), 2)
+                         pygame.Rect(ox, oy, sq * board_size, sq * board_size), 2)
 
         # Right panel — palette
-        px = self._panel_x()
+        px = self._panel_x(board_size)
         pw = self.w - px - self.PADDING
         pygame.draw.rect(self.screen, self.PANEL_BG,
                          pygame.Rect(px - self.PADDING // 2, oy,
@@ -1302,7 +1350,7 @@ class BoardLayoutEditor:
         pal_hdr = self.label_font.render('Palette', True, self.TITLE_COLOR)
         self.screen.blit(pal_hdr, (px, oy + 6))
 
-        for color_str, piece_type, rect in self._palette_rects():
+        for color_str, piece_type, rect in self._palette_rects(board_size):
             is_hole_entry = (color_str == 'hole')
             is_sel = (selected == 'hole' if is_hole_entry
                       else selected == (color_str, piece_type))
@@ -1336,14 +1384,27 @@ class BoardLayoutEditor:
                 lbl = self.small_font.render(lbl_text, True, tc)
             self.screen.blit(lbl, lbl.get_rect(centery=rect.centery, left=icon_x + 28))
 
-        # Bottom buttons
+        # Preset buttons (row above the action buttons)
+        preset_rects = self._preset_rects(btn_y, btn_h, board_size)
+        preset_lbl = self.tiny_font.render('Presets:', True, self.DIM_TEXT)
+        if preset_rects:
+            first_rect = next(iter(preset_rects.values()))
+            self.screen.blit(preset_lbl, (ox, first_rect.y - 18))
+        for name, rect in preset_rects.items():
+            hov = rect.collidepoint(*mouse)
+            bg = self.BTN_HOV if hov else self.BTN_BG
+            pygame.draw.rect(self.screen, bg, rect, border_radius=6)
+            txt = self.tiny_font.render(name, True, self.TEXT)
+            self.screen.blit(txt, txt.get_rect(center=rect.center))
+
+        # Bottom action buttons
         btn_colors = {
             '← Back': self.BTN_BG,
             'Reset':   self.BTN_RST,
             'Save':    self.BTN_SAVE,
             'Play':    self.BTN_PLAY,
         }
-        for label, rect in self._button_rects(btn_y, btn_h).items():
+        for label, rect in self._button_rects(btn_y, btn_h, board_size).items():
             hov = rect.collidepoint(*mouse)
             base = btn_colors[label]
             bg = tuple(min(c + 25, 255) for c in base) if hov else base
@@ -1355,6 +1416,95 @@ class BoardLayoutEditor:
         if status_msg:
             sm = self.small_font.render(status_msg, True, Colours.GOLD)
             self.screen.blit(sm, (ox, btn_y - 22))
+
+
+def _make_layout(board_size, matrix):
+    """Build a layout dict with the given board_size and matrix."""
+    return {'board_size': board_size, 'matrix': matrix,
+            'en_passant_target': None, 'promotion_pending': None}
+
+
+def _preset_standard():
+    """Standard chess starting position on an 8×8 board."""
+    back_rank = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook']
+    matrix = [[None] * 8 for _ in range(8)]
+    for x in range(8):
+        matrix[x][0] = {'piece_type': back_rank[x], 'color': 'black', 'has_moved': False}
+        matrix[x][1] = {'piece_type': 'pawn',        'color': 'black', 'has_moved': False}
+        matrix[x][6] = {'piece_type': 'pawn',        'color': 'white', 'has_moved': False}
+        matrix[x][7] = {'piece_type': back_rank[x],  'color': 'white', 'has_moved': False}
+    return _make_layout(8, matrix)
+
+
+def _preset_triangle():
+    """
+    Triangle board on 8×8.  Holes where x + y < 7 leave a lower-right triangle
+    (36 playable squares).  White starts along the bottom row and right pawns;
+    Black starts along the right column.
+    """
+    N = 8
+    matrix = [['hole'] * N for _ in range(N)]
+    # Clear holes for the playable triangle
+    for x in range(N):
+        for y in range(N):
+            if x + y >= N - 1:
+                matrix[x][y] = None
+
+    # White back rank at y=7 (all 8 squares are in the triangle)
+    white_back = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook']
+    for x in range(N):
+        matrix[x][7] = {'piece_type': white_back[x], 'color': 'white', 'has_moved': False}
+    # White pawns at y=6, x=1..7 (x=0,y=6 is a hole since 0+6=6 < 7)
+    for x in range(1, N):
+        matrix[x][6] = {'piece_type': 'pawn', 'color': 'white', 'has_moved': False}
+
+    # Black back rank along x=7, y=0..6
+    black_back = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight']
+    for y in range(7):
+        matrix[7][y] = {'piece_type': black_back[y], 'color': 'black', 'has_moved': False}
+    # Black pawns at x=6, y=1..6 (x=6,y=0 is a hole since 6+0=6 < 7)
+    for y in range(1, 7):
+        matrix[6][y] = {'piece_type': 'pawn', 'color': 'black', 'has_moved': False}
+
+    return _make_layout(N, matrix)
+
+
+def _preset_hexagon():
+    """
+    Approximate hexagon on a 12×12 board.
+    Holes where: x+y < 3, x+y > 19, x-y > 8, or y-x > 8.
+    Pieces on the valid back ranks at y=11 (white) and y=0 (black).
+    """
+    N = 12
+    matrix = [[None] * N for _ in range(N)]
+
+    def is_hole(x, y):
+        return x + y < 3 or x + y > 19 or x - y > 8 or y - x > 8
+
+    for x in range(N):
+        for y in range(N):
+            if is_hole(x, y):
+                matrix[x][y] = 'hole'
+
+    # White back rank at y=11 — valid x=3..8
+    white_back = ['rook', 'knight', 'bishop', 'queen', 'king', 'rook']
+    for i, x in enumerate(range(3, 9)):
+        matrix[x][11] = {'piece_type': white_back[i], 'color': 'white', 'has_moved': False}
+    # White pawns at y=10 — valid x=2..9
+    for x in range(2, 10):
+        if not is_hole(x, 10):
+            matrix[x][10] = {'piece_type': 'pawn', 'color': 'white', 'has_moved': False}
+
+    # Black back rank at y=0 — valid x=3..8
+    black_back = ['rook', 'knight', 'bishop', 'queen', 'king', 'rook']
+    for i, x in enumerate(range(3, 9)):
+        matrix[x][0] = {'piece_type': black_back[i], 'color': 'black', 'has_moved': False}
+    # Black pawns at y=1 — valid x=2..9
+    for x in range(2, 10):
+        if not is_hole(x, 1):
+            matrix[x][1] = {'piece_type': 'pawn', 'color': 'black', 'has_moved': False}
+
+    return _make_layout(N, matrix)
 
 
 def _start_menu(screen, w, h):
@@ -1455,6 +1605,7 @@ def main():
                 game.board.pieces_defs = custom_defs
             if custom_layout is not None:
                 game.board.from_dict(custom_layout)
+                game.graphics.set_board_size(game.board.board_size)
             game.main()
 
 

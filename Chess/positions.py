@@ -23,18 +23,21 @@ class PieceMoves:
         "straight": [(1, 0), (-1, 0), (0, 1), (0, -1)],
     }
 
-    def __init__(self, pos, piece_type, piece_color, board_matrix, piece_defs, white_color):
+    def __init__(self, pos, piece_type, piece_color, board_matrix, piece_defs, white_color,
+                 board_size=8):
         self.pos = pos
         self.piece_type = piece_type
         self.piece_color = piece_color
         self.board = board_matrix
         self.defs = piece_defs
         self.is_white = (piece_color == white_color)
+        self.board_size = board_size
         self.legal = []
         self._compute()
 
     def _on_board(self, x, y):
-        if not (0 <= x <= 7 and 0 <= y <= 7):
+        N = self.board_size
+        if not (0 <= x < N and 0 <= y < N):
             return False
         return not self.board[x][y].is_hole
 
@@ -84,7 +87,7 @@ class PieceMoves:
         if extra:
             rows_from_back = rule.get('first_move_start_rows_from_back', 0)
             direction = -1 if self.is_white else 1
-            back_row  = 7 if self.is_white else 0
+            back_row  = self.board_size - 1 if self.is_white else 0
             start_row = back_row + direction * rows_from_back
             if y == start_row:
                 max_steps += extra

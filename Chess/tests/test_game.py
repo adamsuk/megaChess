@@ -48,6 +48,7 @@ def make_graphics_stub(square_size=80):
     """Graphics instance with all __init__ state set manually — no display needed."""
     g = object.__new__(Graphics)
     g.square_size = square_size
+    g.board_size = 8
     g.piece_size = square_size // 2
     g.window_size = square_size * 8
     g.button_bar_height = 48
@@ -1622,9 +1623,7 @@ class TestBoardLayoutEditorRun(unittest.TestCase):
 
     def test_back_button_click_exits(self):
         editor = make_layout_editor()
-        sq = editor._board_sq_size()
-        _, oy = editor._board_origin()
-        btn_y = oy + sq * 8 + editor.PADDING
+        btn_y = editor._btn_y()
         back_rect = editor._button_rects(btn_y, 40)['← Back']
         ev = self._make_event(pygame.MOUSEBUTTONDOWN,
                               pos=back_rect.center, button=1)
@@ -1633,9 +1632,7 @@ class TestBoardLayoutEditorRun(unittest.TestCase):
 
     def test_play_button_click_exits(self):
         editor = make_layout_editor()
-        sq = editor._board_sq_size()
-        _, oy = editor._board_origin()
-        btn_y = oy + sq * 8 + editor.PADDING
+        btn_y = editor._btn_y()
         play_rect = editor._button_rects(btn_y, 40)['Play']
         ev = self._make_event(pygame.MOUSEBUTTONDOWN,
                               pos=play_rect.center, button=1)
@@ -1645,9 +1642,7 @@ class TestBoardLayoutEditorRun(unittest.TestCase):
 
     def test_reset_button_click(self):
         editor = make_layout_editor()
-        sq = editor._board_sq_size()
-        _, oy = editor._board_origin()
-        btn_y = oy + sq * 8 + editor.PADDING
+        btn_y = editor._btn_y()
         reset_rect = editor._button_rects(btn_y, 40)['Reset']
         esc = self._make_event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
         ev = self._make_event(pygame.MOUSEBUTTONDOWN,
@@ -1662,9 +1657,7 @@ class TestBoardLayoutEditorRun(unittest.TestCase):
 
     def test_save_button_click(self):
         editor = make_layout_editor()
-        sq = editor._board_sq_size()
-        _, oy = editor._board_origin()
-        btn_y = oy + sq * 8 + editor.PADDING
+        btn_y = editor._btn_y()
         save_rect = editor._button_rects(btn_y, 40)['Save']
         esc = self._make_event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
         ev = self._make_event(pygame.MOUSEBUTTONDOWN,
@@ -1925,6 +1918,86 @@ class TestBoardLayoutEditorHoles(unittest.TestCase):
         board2 = Board()
         board2.from_dict(d)
         self.assertTrue(board2.matrix[2][2].is_hole)
+
+
+
+# ---------------------------------------------------------------------------
+# Preset functions
+# ---------------------------------------------------------------------------
+
+class TestPresets(unittest.TestCase):
+
+    def setUp(self):
+        from game import _preset_standard, _preset_triangle, _preset_hexagon
+        self._preset_standard = _preset_standard
+        self._preset_triangle = _preset_triangle
+        self._preset_hexagon  = _preset_hexagon
+
+    def test_standard_board_size_is_8(self):
+        layout = self._preset_standard()
+        self.assertEqual(layout['board_size'], 8)
+
+    def test_standard_matrix_is_8x8(self):
+        layout = self._preset_standard()
+        self.assertEqual(len(layout['matrix']), 8)
+        for col in layout['matrix']:
+            self.assertEqual(len(col), 8)
+
+    def test_standard_has_no_holes(self):
+        layout = self._preset_standard()
+        for col in layout['matrix']:
+            for cell in col:
+                self.assertNotEqual(cell, 'hole')
+
+    def test_triangle_board_size_is_8(self):
+        layout = self._preset_triangle()
+        self.assertEqual(layout['board_size'], 8)
+
+    def test_triangle_upper_left_is_hole(self):
+        """(0,0) is a hole since 0+0=0 < 7."""
+        layout = self._preset_triangle()
+        self.assertEqual(layout['matrix'][0][0], 'hole')
+
+    def test_triangle_corner_not_hole(self):
+        """(7,7) must be playable (7+7=14 >= 7)."""
+        layout = self._preset_triangle()
+        self.assertNotEqual(layout['matrix'][7][7], 'hole')
+
+    def test_triangle_loads_into_board(self):
+        layout = self._preset_triangle()
+        board = Board()
+        board.from_dict(layout)
+        self.assertEqual(board.board_size, 8)
+        self.assertTrue(board.matrix[0][0].is_hole)
+        self.assertFalse(board.matrix[7][7].is_hole)
+
+    def test_hexagon_board_size_is_12(self):
+        layout = self._preset_hexagon()
+        self.assertEqual(layout['board_size'], 12)
+
+    def test_hexagon_matrix_is_12x12(self):
+        layout = self._preset_hexagon()
+        self.assertEqual(len(layout['matrix']), 12)
+        for col in layout['matrix']:
+            self.assertEqual(len(col), 12)
+
+    def test_hexagon_corner_is_hole(self):
+        """(0,0) is a hole since 0+0=0 < 3."""
+        layout = self._preset_hexagon()
+        self.assertEqual(layout['matrix'][0][0], 'hole')
+
+    def test_hexagon_center_not_hole(self):
+        """(5,5) should be playable (5+5=10 not < 3, not > 19, not exceeds diagonal)."""
+        layout = self._preset_hexagon()
+        self.assertNotEqual(layout['matrix'][5][5], 'hole')
+
+    def test_hexagon_loads_into_board(self):
+        layout = self._preset_hexagon()
+        board = Board()
+        board.from_dict(layout)
+        self.assertEqual(board.board_size, 12)
+        self.assertEqual(len(board.matrix), 12)
+        self.assertTrue(board.matrix[0][0].is_hole)
 
 
 if __name__ == '__main__':

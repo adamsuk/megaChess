@@ -837,14 +837,21 @@ class PieceEditor:
     def __init__(self):
         pygame.init()
         info = pygame.display.Info()
-        self.w = min(info.current_w, info.current_h)
-        self.h = self.w
-        self.screen = pygame.display.set_mode((self.w, self.h))
+        _android = _on_android()
+        _flags = pygame.FULLSCREEN if _android else 0
+        self.w = info.current_w if _android else min(info.current_w, info.current_h)
+        self.h = info.current_h if _android else self.w
+        self.screen = pygame.display.set_mode((self.w, self.h), _flags)
         pygame.display.set_caption('megaChess — piece editor')
+        self._piece_names_cache = []
         self.title_font = pygame.font.Font('freesansbold.ttf', 32)
         self.label_font = pygame.font.Font('freesansbold.ttf', 22)
         self.small_font = pygame.font.Font('freesansbold.ttf', 16)
         self.tiny_font  = pygame.font.Font('freesansbold.ttf', 13)
+
+    @property
+    def _portrait(self):
+        return self.h > self.w * 1.1
 
     def run(self):
         """
@@ -978,21 +985,49 @@ class PieceEditor:
     # ------------------------------------------------------------------
 
     def _piece_rects(self, names, left_w):
-        top = 60
-        rects = []
-        for i in range(len(names)):
-            rects.append(pygame.Rect(self.PADDING, top + i * 44, left_w - self.PADDING * 2, 38))
-        return rects
+        if self._portrait:
+            # Horizontal wrapping tabs across full width
+            pad = self.PADDING
+            tab_h = 36
+            tab_w = max(80, min(160, (self.w - pad) // max(1, len(names))))
+            rects = []
+            x, y = pad, pad
+            for _ in names:
+                if x + tab_w + pad > self.w:
+                    x = pad
+                    y += tab_h + 4
+                rects.append(pygame.Rect(x, y, tab_w, tab_h))
+                x += tab_w + 4
+            return rects
+        else:
+            # Original vertical list
+            top = 60
+            rects = []
+            for i in range(len(names)):
+                rects.append(pygame.Rect(self.PADDING, top + i * 44, left_w - self.PADDING * 2, 38))
+            return rects
 
     def _button_rects(self, btn_y, btn_h):
         labels = ['← Back', 'Clone', 'Reset', 'Save', 'Play']
-        total_btn_w = self.w - self.PADDING * 2
-        bw = (total_btn_w - self.PADDING * (len(labels) - 1)) // len(labels)
+        total_w = self.w - self.PADDING * 2
+        pad = self.PADDING
+        per_row = max(1, min(len(labels), (total_w + pad) // (90 + pad)))
+        rows = [labels[i:i + per_row] for i in range(0, len(labels), per_row)]
         rects = {}
-        for i, label in enumerate(labels):
-            x = self.PADDING + i * (bw + self.PADDING)
-            rects[label] = pygame.Rect(x, btn_y, bw, btn_h)
+        for row_idx, row_labels in enumerate(reversed(rows)):
+            y = btn_y - row_idx * (btn_h + pad)
+            bw = (total_w - pad * (len(row_labels) - 1)) // len(row_labels)
+            for col_idx, label in enumerate(row_labels):
+                x = self.PADDING + col_idx * (bw + pad)
+                rects[label] = pygame.Rect(x, y, bw, btn_h)
         return rects
+
+    def _btn_area_h(self, btn_h):
+        labels_count = 5
+        total_w = self.w - self.PADDING * 2
+        per_row = max(1, min(labels_count, (total_w + self.PADDING) // (90 + self.PADDING)))
+        n_rows = (labels_count + per_row - 1) // per_row
+        return n_rows * btn_h + (n_rows - 1) * self.PADDING
 
     def _rule_toggle_rects(self, rule, rule_y, right_x, right_w):
         """Returns {flag: pygame.Rect} for toggleable boolean flags of a rule."""
@@ -1286,9 +1321,11 @@ class BoardLayoutEditor:
                  custom_board=None, custom_piece=None):
         pygame.init()
         info = pygame.display.Info()
-        self.w = min(info.current_w, info.current_h)
-        self.h = self.w
-        self.screen = pygame.display.set_mode((self.w, self.h))
+        _android = _on_android()
+        _flags = pygame.FULLSCREEN if _android else 0
+        self.w = info.current_w if _android else min(info.current_w, info.current_h)
+        self.h = info.current_h if _android else self.w
+        self.screen = pygame.display.set_mode((self.w, self.h), _flags)
         pygame.display.set_caption('megaChess — board layout editor')
         self.title_font = pygame.font.Font('freesansbold.ttf', 28)
         self.label_font = pygame.font.Font('freesansbold.ttf', 18)
@@ -1306,6 +1343,10 @@ class BoardLayoutEditor:
         self._pieces_defs = AllPieces().pieces_defs
         self.piece_icons = {}
         self._reload_icons()
+
+    @property
+    def _portrait(self):
+        return self.h > self.w * 1.1
 
     def _reload_icons(self):
         """Re-render piece icons using current piece colours (custom or theme)."""

@@ -878,13 +878,19 @@ class PieceEditor:
         while True:
             mouse = pygame.mouse.get_pos()
             piece_names = list(defs.keys())
+            self._piece_names_cache = piece_names
 
             # Layout geometry
-            left_w  = self.w // 3
-            right_x = left_w + self.PADDING
-            right_w = self.w - right_x - self.PADDING
-            btn_h   = 42
-            btn_y   = self.h - btn_h - self.PADDING
+            btn_h = 42
+            btn_y = self.h - self._btn_area_h(btn_h) - self.PADDING
+            if self._portrait:
+                left_w  = 0
+                right_x = self.PADDING
+                right_w = self.w - 2 * self.PADDING
+            else:
+                left_w  = self.w // 3
+                right_x = left_w + self.PADDING
+                right_w = self.w - right_x - self.PADDING
 
             for event in pygame.event.get():
                 if event.type == locals.QUIT:
@@ -897,16 +903,18 @@ class PieceEditor:
                 if event.type == locals.MOUSEBUTTONDOWN:
                     mx, my = event.pos
 
-                    # Left panel — select piece
-                    if mx < left_w:
-                        item_rects = self._piece_rects(piece_names, left_w)
-                        for name, rect in zip(piece_names, item_rects):
-                            if rect.collidepoint(mx, my):
-                                selected = name
-                                scroll_y = 0
+                    # Piece selector — left panel (landscape) or top tabs (portrait)
+                    item_rects = self._piece_rects(piece_names, left_w)
+                    piece_clicked = False
+                    for name, rect in zip(piece_names, item_rects):
+                        if rect.collidepoint(mx, my):
+                            selected = name
+                            scroll_y = 0
+                            piece_clicked = True
+                            break
 
-                    # Right panel — delta grid, rule add/remove, flag toggles
-                    elif mx >= right_x and my < btn_y:
+                    if not piece_clicked and mx >= right_x and my < btn_y:
+                        # Right panel — delta grid, rule add/remove, flag toggles
                         if selected in defs:
                             piece_def = defs[selected]
                             rules = piece_def['move_rules']
@@ -968,7 +976,12 @@ class PieceEditor:
                     if selected in defs:
                         n_rules = len(defs[selected].get('move_rules', []))
                         content_h = 32 + n_rules * self.RULE_H + 40
-                        visible_h = btn_y - 55
+                        if self._portrait:
+                            tab_rects = self._piece_rects(piece_names, left_w)
+                            top_y = (tab_rects[-1].bottom + self.PADDING) if tab_rects else 50
+                        else:
+                            top_y = 55
+                        visible_h = btn_y - top_y
                         max_scroll = max(0, content_h - visible_h)
                     else:
                         max_scroll = 0
@@ -1075,13 +1088,19 @@ class PieceEditor:
     def _add_rule_rect(self, piece_def, right_x, scroll_y):
         """'+ Add Rule' button positioned below the last rule."""
         n = len(piece_def.get('move_rules', []))
-        y = 92 - scroll_y + n * self.RULE_H
+        y = self._rules_start_y(getattr(self, '_piece_names_cache', []), scroll_y) + n * self.RULE_H
         return pygame.Rect(right_x, y, 110, 24)
+
+    def _rules_start_y(self, piece_names, scroll_y=0):
+        """Y-coordinate of the first rule block in the right panel."""
+        if self._portrait and piece_names:
+            rects = self._piece_rects(piece_names, 0)
+            return (rects[-1].bottom + self.PADDING + 32) - scroll_y if rects else (50 + 32 - scroll_y)
+        return 92 - scroll_y
 
     def _find_toggle(self, piece_def, mx, my, right_x, right_w, scroll_y):
         """Return (rule_idx, flag) if the click / hover lands on a toggle, else None."""
-        # y must match _draw: header starts at 60-scroll_y, then += 32 before first rule
-        y = 92 - scroll_y
+        y = self._rules_start_y(getattr(self, '_piece_names_cache', []), scroll_y)
         for i, rule in enumerate(piece_def.get('move_rules', [])):
             toggle_rects = self._rule_toggle_rects(rule, y, right_x, right_w)
             for flag, rect in toggle_rects.items():
@@ -1092,7 +1111,7 @@ class PieceEditor:
 
     def _find_delta_click(self, piece_def, mx, my, right_x, scroll_y):
         """Return (rule_idx, dx, dy) if the click lands on a delta grid cell, else None."""
-        y = 92 - scroll_y
+        y = self._rules_start_y(getattr(self, '_piece_names_cache', []), scroll_y)
         for i, rule in enumerate(piece_def.get('move_rules', [])):
             for (dx, dy), rect in self._delta_grid_rects(y, right_x).items():
                 if rect.collidepoint(mx, my):
@@ -1102,7 +1121,7 @@ class PieceEditor:
 
     def _find_remove_rule(self, piece_def, mx, my, right_x, right_w, scroll_y):
         """Return rule index if the click lands on a remove-rule button, else None."""
-        y = 92 - scroll_y
+        y = self._rules_start_y(getattr(self, '_piece_names_cache', []), scroll_y)
         for i in range(len(piece_def.get('move_rules', []))):
             if self._remove_rule_rect(y, right_x, right_w).collidepoint(mx, my):
                 return i
@@ -1143,13 +1162,19 @@ class PieceEditor:
         hint = self.tiny_font.render('Esc or ← Back = return to main menu', True, self.DIM_TEXT)
         self.screen.blit(hint, (self.w - hint.get_width() - self.PADDING, self.PADDING))
 
-        # Left panel — pixel art frame (square corners, teal outer + dark inner)
-        left_panel = pygame.Rect(0, 50, left_w, btn_y - 50)
-        pygame.draw.rect(self.screen, self.PANEL_BG, left_panel, border_radius=0)
-        pygame.draw.rect(self.screen, Colours.HIGH,  left_panel, 2)
-        pygame.draw.rect(self.screen, (30, 25, 55),  left_panel.inflate(-4, -4), 1)
+        # Piece selector (left panel in landscape, top tabs in portrait)
+        tab_rects = self._piece_rects(piece_names, left_w)
+        if self._portrait:
+            tab_bottom = (tab_rects[-1].bottom + self.PADDING) if tab_rects else 50
+        else:
+            # Left panel — pixel art frame (square corners, teal outer + dark inner)
+            left_panel = pygame.Rect(0, 50, left_w, btn_y - 50)
+            pygame.draw.rect(self.screen, self.PANEL_BG, left_panel, border_radius=0)
+            pygame.draw.rect(self.screen, Colours.HIGH,  left_panel, 2)
+            pygame.draw.rect(self.screen, (30, 25, 55),  left_panel.inflate(-4, -4), 1)
+            tab_bottom = 55
 
-        for name, rect in zip(piece_names, self._piece_rects(piece_names, left_w)):
+        for name, rect in zip(piece_names, tab_rects):
             is_sel = (name == selected)
             hov    = rect.collidepoint(*mouse)
             base   = self.SEL_BG if is_sel else (self.BTN_HOV if hov else self.BTN_BG)
@@ -1159,13 +1184,20 @@ class PieceEditor:
                 pygame.draw.rect(self.screen, Colours.HIGH, rect, 2)
 
         # Right panel — pixel art frame
-        right_panel = pygame.Rect(right_x - self.PADDING, 50,
-                                  right_w + self.PADDING, btn_y - 50)
+        if self._portrait:
+            right_panel = pygame.Rect(self.PADDING // 2, tab_bottom,
+                                      self.w - self.PADDING, btn_y - tab_bottom)
+        else:
+            right_panel = pygame.Rect(right_x - self.PADDING, 50,
+                                      right_w + self.PADDING, btn_y - 50)
         pygame.draw.rect(self.screen, self.PANEL_BG, right_panel, border_radius=0)
         pygame.draw.rect(self.screen, Colours.HIGH,  right_panel, 2)
         pygame.draw.rect(self.screen, (30, 25, 55),  right_panel.inflate(-4, -4), 1)
 
-        clip = pygame.Rect(right_x - self.PADDING, 55, right_w + self.PADDING, btn_y - 60)
+        if self._portrait:
+            clip = pygame.Rect(self.PADDING, tab_bottom, right_w, btn_y - tab_bottom)
+        else:
+            clip = pygame.Rect(right_x - self.PADDING, 55, right_w + self.PADDING, btn_y - 60)
         self.screen.set_clip(clip)
 
         hovered_flag  = None
@@ -1174,10 +1206,14 @@ class PieceEditor:
 
         if selected and selected in defs:
             piece_def = defs[selected]
-            y = 60 - scroll_y
-            hdr = self.label_font.render(f'{selected}  —  move rules', True, self.TEXT)
-            self.screen.blit(hdr, (right_x, y))
-            y += 32
+            if self._portrait:
+                hdr = self.label_font.render(f'{selected}  —  move rules', True, self.TEXT)
+                self.screen.blit(hdr, (right_x, tab_bottom + self.PADDING // 2))
+                y = tab_bottom + 32 - scroll_y
+            else:
+                hdr = self.label_font.render(f'{selected}  —  move rules', True, self.TEXT)
+                self.screen.blit(hdr, (right_x, 60 - scroll_y))
+                y = 92 - scroll_y
 
             for i, rule in enumerate(piece_def.get('move_rules', [])):
                 # ── Rule label + remove button ────────────────────────────
@@ -1435,17 +1471,32 @@ class BoardLayoutEditor:
 
     def _board_sq_size(self, board_size=8):
         """Size of each board square in pixels."""
+        if self._portrait:
+            return (self.w - self.PADDING * 2) // board_size
         board_area = self.w * 3 // 4   # board uses left 3/4 of the window
         return board_area // board_size
 
     def _board_origin(self):
         """Top-left pixel corner of the board."""
+        if self._portrait:
+            return (self.PADDING, 44)
         return (0, 44)
 
     def _panel_x(self, board_size=8):
+        if self._portrait:
+            # panel is below the board, not to the right — x starts at left edge
+            return self.PADDING
         sq = self._board_sq_size(board_size)
         ox, _ = self._board_origin()
         return ox + sq * board_size + self.PADDING
+
+    def _panel_top_y(self, board_size=8):
+        """Y-coordinate where the right/below panel starts."""
+        if self._portrait:
+            sq = self._board_sq_size(board_size)
+            _, oy = self._board_origin()
+            return oy + sq * board_size + self.PADDING
+        return 44  # same as _board_origin y
 
     def _board_sq_rect(self, x, y, board_size=8):
         sq = self._board_sq_size(board_size)
@@ -1468,32 +1519,65 @@ class BoardLayoutEditor:
         """
         px = self._panel_x(board_size)
         pw = self.w - px - self.PADDING
-        item_h = 30
-        gap    = 4
-        rects  = []
-        y = 44 + 32  # below "Palette" label
-        for color_str in ('white', 'black'):
-            for piece_type in self.PALETTE_PIECES:
-                rects.append((color_str, piece_type,
-                               pygame.Rect(px, y, pw, item_h)))
-                y += item_h + gap
-            y += gap * 3  # extra gap between colour sections
-        # Hole tool — separate section at the bottom of the palette
-        y += gap * 2
-        rects.append(('hole', 'hole', pygame.Rect(px, y, pw, item_h)))
-        return rects
+        if self._portrait:
+            # Two-column grid: white pieces left, black pieces right
+            col_w = (pw - self.PADDING) // 2
+            item_h = 28
+            gap = 3
+            rects = []
+            pal_y = self._panel_top_y(board_size) + 28  # below "Palette" label
+            for i, piece_type in enumerate(self.PALETTE_PIECES):
+                y = pal_y + i * (item_h + gap)
+                rects.append(('white', piece_type, pygame.Rect(px, y, col_w, item_h)))
+                rects.append(('black', piece_type, pygame.Rect(px + col_w + self.PADDING, y, col_w, item_h)))
+            # Hole: full-width row below
+            y = pal_y + len(self.PALETTE_PIECES) * (item_h + gap) + gap * 2
+            rects.append(('hole', 'hole', pygame.Rect(px, y, pw, item_h)))
+            return rects
+        else:
+            item_h = 30
+            gap    = 4
+            rects  = []
+            y = 44 + 32  # below "Palette" label
+            for color_str in ('white', 'black'):
+                for piece_type in self.PALETTE_PIECES:
+                    rects.append((color_str, piece_type,
+                                   pygame.Rect(px, y, pw, item_h)))
+                    y += item_h + gap
+                y += gap * 3  # extra gap between colour sections
+            # Hole tool — separate section at the bottom of the palette
+            y += gap * 2
+            rects.append(('hole', 'hole', pygame.Rect(px, y, pw, item_h)))
+            return rects
 
     def _button_rects(self, btn_y, btn_h, board_size=8):
         labels = ['← Back', 'Reset', 'Save', 'Play']
-        sq = self._board_sq_size(board_size)
-        total_w = sq * board_size   # buttons span the board width
-        bw = (total_w - self.PADDING * (len(labels) - 1)) // len(labels)
-        ox, _ = self._board_origin()
+        pad = self.PADDING
+        if self._portrait:
+            total_w = self.w - pad * 2
+            ox = pad
+        else:
+            sq = self._board_sq_size(board_size)
+            total_w = sq * board_size
+            ox, _ = self._board_origin()
+        per_row = max(1, min(len(labels), (total_w + pad) // (90 + pad)))
+        rows = [labels[i:i + per_row] for i in range(0, len(labels), per_row)]
         rects = {}
-        for i, label in enumerate(labels):
-            x = ox + i * (bw + self.PADDING)
-            rects[label] = pygame.Rect(x, btn_y, bw, btn_h)
+        for row_idx, row_labels in enumerate(reversed(rows)):
+            y = btn_y - row_idx * (btn_h + pad)
+            bw = (total_w - pad * (len(row_labels) - 1)) // len(row_labels)
+            for col_idx, label in enumerate(row_labels):
+                x = ox + col_idx * (bw + pad)
+                rects[label] = pygame.Rect(x, y, bw, btn_h)
         return rects
+
+    def _btn_area_h(self, btn_h, board_size=8):
+        labels_count = 4
+        pad = self.PADDING
+        total_w = (self.w - pad * 2) if self._portrait else (self._board_sq_size(board_size) * board_size)
+        per_row = max(1, min(labels_count, (total_w + pad) // (90 + pad)))
+        n_rows = (labels_count + per_row - 1) // per_row
+        return n_rows * btn_h + (n_rows - 1) * pad
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -1654,10 +1738,8 @@ class BoardLayoutEditor:
 
     def _btn_y(self, board_size=8):
         """Return the y-pixel of the action buttons row (consistent with run())."""
-        sq = self._board_sq_size(board_size)
-        _, oy = self._board_origin()
-        preset_btn_h = 32
-        return oy + sq * board_size + self.PADDING * 2 + preset_btn_h + 18
+        btn_h = 40
+        return self.h - self._btn_area_h(btn_h, board_size) - self.PADDING
 
     MIN_BOARD_SIZE = 4
     MAX_BOARD_SIZE = 12
@@ -1667,7 +1749,10 @@ class BoardLayoutEditor:
         px = self._panel_x(board_size)
         pw = self.w - px - self.PADDING
         btn_w = 28
-        y = 44 + 6   # near top of panel, same baseline as palette header
+        if self._portrait:
+            y = self._panel_top_y(board_size) + 6
+        else:
+            y = 44 + 6   # near top of panel, same baseline as palette header
         minus_rect = pygame.Rect(px + pw - btn_w * 2 - 4, y, btn_w, 22)
         plus_rect  = pygame.Rect(px + pw - btn_w,          y, btn_w, 22)
         return minus_rect, plus_rect
@@ -1700,9 +1785,13 @@ class BoardLayoutEditor:
     def _preset_rects(self, btn_y, btn_h, board_size=8):
         """Return dict of preset_name → pygame.Rect, above the bottom buttons."""
         names = ['Standard 8×8', 'Diamond 8×8', 'Hexagon 12×12']
-        sq = self._board_sq_size(board_size)
-        ox, _ = self._board_origin()
-        total_w = sq * board_size
+        if self._portrait:
+            ox = self.PADDING
+            total_w = self.w - self.PADDING * 2
+        else:
+            sq = self._board_sq_size(board_size)
+            ox, _ = self._board_origin()
+            total_w = sq * board_size
         preset_btn_h = 32
         preset_y = btn_y - preset_btn_h - self.PADDING
         bw = (total_w - self.PADDING * (len(names) - 1)) // len(names)
@@ -1786,7 +1875,10 @@ class BoardLayoutEditor:
         self.screen.blit(title, (self.PADDING,      8))
         hint = self.tiny_font.render('Left-click: place  •  Right-click: clear  •  Esc: back',
                                      True, self.DIM_TEXT)
-        self.screen.blit(hint, (self._panel_x(board_size), 8))
+        if self._portrait:
+            self.screen.blit(hint, hint.get_rect(right=self.w - self.PADDING, top=8))
+        else:
+            self.screen.blit(hint, (self._panel_x(board_size), 8))
 
         sq = self._board_sq_size(board_size)
         ox, oy = self._board_origin()
@@ -1876,17 +1968,25 @@ class BoardLayoutEditor:
                                                  True, outline)
                     self.screen.blit(lbl, lbl.get_rect(center=(cx, cy)))
 
-        # Right panel — pixel art frame + palette + themes
+        # Panel — pixel art frame + palette + themes
         px = self._panel_x(board_size)
         pw = self.w - px - self.PADDING
-        panel_rect = pygame.Rect(px - self.PADDING // 2, oy - 2,
-                                 pw + self.PADDING, btn_y - oy + 2 - self.PADDING)
+        if self._portrait:
+            panel_top = self._panel_top_y(board_size)
+            panel_rect = pygame.Rect(self.PADDING // 2, panel_top,
+                                     self.w - self.PADDING, btn_y - panel_top - self.PADDING)
+        else:
+            panel_rect = pygame.Rect(px - self.PADDING // 2, oy - 2,
+                                     pw + self.PADDING, btn_y - oy + 2 - self.PADDING)
         pygame.draw.rect(self.screen, self.PANEL_BG, panel_rect, border_radius=0)
         pygame.draw.rect(self.screen, Colours.HIGH,  panel_rect, 2)
         pygame.draw.rect(self.screen, (30, 25, 55),  panel_rect.inflate(-4, -4), 1)
 
         pal_hdr = self.label_font.render('Palette', True, self.TITLE_COLOR)
-        self.screen.blit(pal_hdr, (px, oy + 6))
+        if self._portrait:
+            self.screen.blit(pal_hdr, (px, self._panel_top_y(board_size) + 6))
+        else:
+            self.screen.blit(pal_hdr, (px, oy + 6))
 
         # Board size controls: "Size: N  [−] [+]"
         minus_rect, plus_rect = self._size_rects(board_size)

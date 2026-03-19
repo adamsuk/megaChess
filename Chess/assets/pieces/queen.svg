@@ -1,35 +1,52 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
-  <!--
-    Pixel art queen: W-shaped crown body with left-face highlight, three crown balls
-    each with shine and accent gem, collar, wide raised base with drop shadow.
-  -->
-  <!-- Drop shadow -->
-  <rect x="6"  y="72" width="68" height="5" rx="1" fill="{fill_lo}"/>
-  <!-- Base platform -->
-  <rect x="2"  y="62" width="76" height="13" rx="1" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Base top highlight -->
-  <rect x="3"  y="63" width="74" height="3" fill="{fill_hi}"/>
-  <!-- Base right shadow -->
-  <rect x="74" y="63" width="3"  height="11" fill="{fill_lo}"/>
-  <!-- Collar -->
-  <rect x="4"  y="55" width="72" height="8" rx="1" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Collar top highlight -->
-  <rect x="5"  y="56" width="70" height="2" fill="{fill_hi}"/>
-  <!-- Crown body (W shape polygon) -->
-  <polygon points="6,62 6,50 10,30 26,46 40,17 54,46 70,30 74,50 74,62 60,62 20,62"
-           fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Crown body left-face highlight -->
-  <polygon points="6,62 6,50 10,30 14,34 10,52 10,62" fill="{fill_hi}"/>
-  <!-- Three crown balls -->
-  <circle cx="10" cy="22" r="9" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <circle cx="40" cy="8"  r="10" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <circle cx="70" cy="22" r="9" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Ball shines (top-left) -->
-  <circle cx="7"  cy="19" r="4" fill="{fill_hi}"/>
-  <circle cx="37" cy="5"  r="5" fill="{fill_hi}"/>
-  <circle cx="67" cy="19" r="4" fill="{fill_hi}"/>
-  <!-- Ball accent gems -->
-  <circle cx="10" cy="22" r="4" fill="{accent}"/>
-  <circle cx="40" cy="8"  r="4" fill="{accent}"/>
-  <circle cx="70" cy="22" r="4" fill="{accent}"/>
+  <!-- Pixel art queen: 10x10 block grid, 8 units per block, rects only    -->
+  <!-- 3 crown orbs (2px each) with accent gems, connecting band, body, base -->
+
+  <!-- Row 0: three crown orb outlines (2px each at cols 1-2, 4-5, 7-8) -->
+  <rect x="8"  y="0"  width="16" height="8" fill="{stroke}"/>
+  <rect x="32" y="0"  width="16" height="8" fill="{stroke}"/>
+  <rect x="56" y="0"  width="16" height="8" fill="{stroke}"/>
+  <!-- Row 1: orb interiors with accent gems -->
+  <rect x="8"  y="8"  width="8"  height="8" fill="{stroke}"/>
+  <rect x="16" y="8"  width="8"  height="8" fill="{accent}"/>
+  <rect x="32" y="8"  width="8"  height="8" fill="{stroke}"/>
+  <rect x="40" y="8"  width="8"  height="8" fill="{accent}"/>
+  <rect x="56" y="8"  width="8"  height="8" fill="{stroke}"/>
+  <rect x="64" y="8"  width="8"  height="8" fill="{accent}"/>
+  <!-- Row 2: crown connecting band (cols 1-8) -->
+  <rect x="8"  y="16" width="64" height="8" fill="{stroke}"/>
+  <!-- Row 3: crown body upper -->
+  <rect x="0"  y="24" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="24" width="16" height="8" fill="{fill_hi}"/>
+  <rect x="24" y="24" width="32" height="8" fill="{fill}"/>
+  <rect x="56" y="24" width="16" height="8" fill="{fill_lo}"/>
+  <rect x="72" y="24" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 4: crown body -->
+  <rect x="0"  y="32" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="32" width="16" height="8" fill="{fill_hi}"/>
+  <rect x="24" y="32" width="32" height="8" fill="{fill}"/>
+  <rect x="56" y="32" width="16" height="8" fill="{fill_lo}"/>
+  <rect x="72" y="32" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 5: crown body lower -->
+  <rect x="0"  y="40" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="40" width="8"  height="8" fill="{fill_hi}"/>
+  <rect x="16" y="40" width="40" height="8" fill="{fill}"/>
+  <rect x="56" y="40" width="16" height="8" fill="{fill_lo}"/>
+  <rect x="72" y="40" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 6: crown body base -->
+  <rect x="0"  y="48" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="48" width="8"  height="8" fill="{fill_hi}"/>
+  <rect x="16" y="48" width="40" height="8" fill="{fill}"/>
+  <rect x="56" y="48" width="16" height="8" fill="{fill_lo}"/>
+  <rect x="72" y="48" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 7: collar (cols 1-8) -->
+  <rect x="8"  y="56" width="64" height="8" fill="{stroke}"/>
+  <!-- Row 8: base -->
+  <rect x="0"  y="64" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="64" width="16" height="8" fill="{fill_hi}"/>
+  <rect x="24" y="64" width="24" height="8" fill="{fill}"/>
+  <rect x="48" y="64" width="24" height="8" fill="{fill_lo}"/>
+  <rect x="72" y="64" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 9: base bottom -->
+  <rect x="0"  y="72" width="80" height="8" fill="{stroke}"/>
 </svg>

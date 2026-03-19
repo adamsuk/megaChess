@@ -237,6 +237,8 @@ class Graphics:
         self.highlights = False
         self.show_hints = True   # toggle: show piece selection + legal-move highlighting
 
+        self.frame_size = 24     # pixel border around board for coordinate labels
+
     # Hex colours used to colorize SVG templates for each side (pixel art tonal palette)
     ICON_COLOURS = {
         'white': {
@@ -288,7 +290,8 @@ class Graphics:
     def set_board_size(self, n):
         """Update rendering parameters when the board changes size."""
         self.board_size = n
-        self.square_size = self.window_size // n
+        board_px = self.window_size - self.frame_size * 2
+        self.square_size = board_px // n
         self.piece_size = self.square_size // 2
         self.piece_font = pygame.font.SysFont(None, self.piece_size)
 
@@ -369,6 +372,32 @@ class Graphics:
             self.screen.blit(shadow_s, shadow_s.get_rect(center=(rect.centerx + 1, rect.centery + 1)))
             self.screen.blit(text_s,   text_s.get_rect(center=rect.center))
 
+    def draw_board_frame(self):
+        """Draw the dark surround + teal border + coordinate labels (a-h / 1-n)."""
+        f  = self.frame_size
+        sq = self.square_size
+        n  = self.board_size
+        board_px = sq * n
+        # Dark background behind the frame area
+        pygame.draw.rect(self.screen, (8, 8, 18), (0, 0, self.window_size, self.window_size))
+        # Teal outer border + dark inner border around the board
+        pygame.draw.rect(self.screen, Colours.HIGH,   (f - 4, f - 4, board_px + 8, board_px + 8), 2)
+        pygame.draw.rect(self.screen, (30, 25, 55), (f - 2, f - 2, board_px + 4, board_px + 4), 2)
+        # File labels (a–z) top and bottom
+        lbl_font = pygame.font.SysFont(None, max(f - 4, 12))
+        files = 'abcdefghijklmnopqrstuvwxyz'[:n]
+        for i, ch in enumerate(files):
+            cx = f + i * sq + sq // 2
+            lbl = lbl_font.render(ch, True, Colours.GOLD)
+            self.screen.blit(lbl, lbl.get_rect(centerx=cx, centery=f // 2))
+            self.screen.blit(lbl, lbl.get_rect(centerx=cx, centery=f + board_px + f // 2))
+        # Rank labels (1–n) left and right
+        for i in range(n):
+            cy = f + i * sq + sq // 2
+            lbl = lbl_font.render(str(n - i), True, Colours.GOLD)
+            self.screen.blit(lbl, lbl.get_rect(centerx=f // 2, centery=cy))
+            self.screen.blit(lbl, lbl.get_rect(centerx=f + board_px + f // 2, centery=cy))
+
     def update_display(self, board, legal_moves, selected_piece, mouse_pos, click,
                        mouse_px=(0, 0), save_exists=False):
         """
@@ -376,6 +405,7 @@ class Graphics:
         mouse_px: raw pixel mouse position (for button bar hover).
         save_exists: whether an autosave file is present (enables Load button).
         """
+        self.draw_board_frame()
         self.draw_board_squares(board)
         # Highlight the selected piece and its legal moves whenever a piece is
         # selected and hints are enabled.  Basing this on `selected_piece`
@@ -423,7 +453,7 @@ class Graphics:
         for x in xrange(self.board_size):
             for y in xrange(self.board_size):
                 sq_obj = board.matrix[int(x)][int(y)]
-                rx, ry = x * sq, y * sq
+                rx, ry = x * sq + self.frame_size, y * sq + self.frame_size
                 if sq_obj.is_hole:
                     pygame.draw.rect(self.screen, HOLE_BG,  (rx, ry, sq, sq))
                     # Sunken bevel: dark top/left, bright bottom/right
@@ -471,7 +501,10 @@ class Graphics:
         Takes in a tuple of board coordinates (x,y)
         and returns the pixel coordinates of the center of the square at that location.
         """
-        return ((board_coords[0] * self.square_size) + self.piece_size, (board_coords[1] * self.square_size) + self.piece_size)
+        return (
+            board_coords[0] * self.square_size + self.frame_size + self.piece_size,
+            board_coords[1] * self.square_size + self.frame_size + self.piece_size,
+        )
 
     def board_coords(self, pixel_coords_tuple):
         """
@@ -479,8 +512,8 @@ class Graphics:
         """
         pixel_x, pixel_y = pixel_coords_tuple
         N = self.board_size - 1
-        x = min(max(pixel_x // self.square_size, 0), N)
-        y = min(max(pixel_y // self.square_size, 0), N)
+        x = min(max((pixel_x - self.frame_size) // self.square_size, 0), N)
+        y = min(max((pixel_y - self.frame_size) // self.square_size, 0), N)
         return (x, y)
 
     def highlight_squares(self, squares, origin):
@@ -494,15 +527,16 @@ class Graphics:
         DOT_RING = (40, 180, 180)
 
         for square in squares:
-            cx = square[0] * self.square_size + self.square_size // 2
-            cy = square[1] * self.square_size + self.square_size // 2
+            cx = square[0] * self.square_size + self.frame_size + self.square_size // 2
+            cy = square[1] * self.square_size + self.frame_size + self.square_size // 2
             pygame.draw.circle(self.screen, Colours.HIGH, (cx, cy), dot_r)
             pygame.draw.circle(self.screen, DOT_RING,     (cx, cy), dot_r, 2)
 
         if origin is not None:
             ox, oy = origin
             pygame.draw.rect(self.screen, Colours.HIGH,
-                             (ox * self.square_size, oy * self.square_size,
+                             (ox * self.square_size + self.frame_size,
+                              oy * self.square_size + self.frame_size,
                               self.square_size, self.square_size), border)
 
         self.highlights = True
@@ -1685,8 +1719,8 @@ def _start_menu(screen, w, h):
     Simple title screen.  Returns 'play', 'edit_pieces', or 'edit_layout'.
     """
     pygame.display.set_caption('megaChess')
-    title_font = pygame.font.Font('freesansbold.ttf', 52)
-    sub_font   = pygame.font.Font('freesansbold.ttf', 18)
+    mega_font  = pygame.font.Font('freesansbold.ttf', 72)
+    sub_font   = pygame.font.Font('freesansbold.ttf', 16)
     btn_font   = pygame.font.Font('freesansbold.ttf', 24)
     clock = pygame.time.Clock()
     bw, bh = 210, 56
@@ -1709,6 +1743,11 @@ def _start_menu(screen, w, h):
         'Edit Layout': 'edit_layout',
     }
 
+    # Pre-build scanline overlay (CRT retro effect)
+    scanlines = pygame.Surface((w, h), pygame.SRCALPHA)
+    for sy in range(0, h, 2):
+        pygame.draw.line(scanlines, (0, 0, 0, 80), (0, sy), (w, sy))
+
     while True:
         mx, my = pygame.mouse.get_pos()
         for event in pygame.event.get():
@@ -1728,19 +1767,40 @@ def _start_menu(screen, w, h):
                     return 'edit_layout'
 
         screen.fill((10, 8, 20))
-        # Pixel art title frame
-        title_text = title_font.render('megaChess', True, Colours.GOLD)
-        tw, th = title_text.get_width(), title_text.get_height()
-        frame_x = w // 2 - tw // 2 - 20
-        frame_y = h // 4 - 16
-        pygame.draw.rect(screen, Colours.HIGH,   (frame_x - 4, frame_y - 4, tw + 48, th + 32))
-        pygame.draw.rect(screen, (8, 8, 18),     (frame_x, frame_y, tw + 40, th + 24))
-        screen.blit(title_text, (frame_x + 20, frame_y + 12))
+        screen.blit(scanlines, (0, 0))
 
-        sub = sub_font.render(
-            'Enter = play  •  E = edit pieces  •  L = edit layout',
-            True, (140, 130, 170))
-        screen.blit(sub, sub.get_rect(centerx=w // 2, y=h // 4 + 90))
+        # Stacked two-colour pixel art title: MEGA (gold) + CHESS (teal)
+        mega_surf  = mega_font.render('MEGA',  True, Colours.GOLD)
+        chess_surf = mega_font.render('CHESS', True, Colours.HIGH)
+        title_w  = max(mega_surf.get_width(), chess_surf.get_width())
+        title_h  = mega_surf.get_height() + chess_surf.get_height() + 4
+        frame_x  = w // 2 - title_w // 2 - 24
+        frame_y  = h // 5
+        pad = 16
+        # Outer teal border + dark inner fill
+        pygame.draw.rect(screen, Colours.HIGH,
+                         (frame_x - 4, frame_y - 4, title_w + 56, title_h + pad * 2 + 8), 3)
+        pygame.draw.rect(screen, (8, 8, 18),
+                         (frame_x, frame_y, title_w + 48, title_h + pad * 2))
+        # Bevel lines on title box
+        bx, by, bw2, bh2 = frame_x, frame_y, title_w + 48, title_h + pad * 2
+        pygame.draw.line(screen, (80, 215, 215), (bx, by), (bx + bw2, by), 1)
+        pygame.draw.line(screen, (80, 215, 215), (bx, by), (bx, by + bh2), 1)
+        pygame.draw.line(screen, (20, 40, 80), (bx, by + bh2), (bx + bw2, by + bh2), 1)
+        pygame.draw.line(screen, (20, 40, 80), (bx + bw2, by), (bx + bw2, by + bh2), 1)
+        # Render titles centred inside box
+        cx = bx + bw2 // 2
+        screen.blit(mega_surf,  mega_surf.get_rect(centerx=cx,  top=frame_y + pad))
+        screen.blit(chess_surf, chess_surf.get_rect(centerx=cx, top=frame_y + pad + mega_surf.get_height() + 4))
+
+        # Blinking cursor prompt
+        blink = (pygame.time.get_ticks() // 500) % 2
+        hint_str = 'PRESS ENTER TO PLAY' + (' _' if blink else '  ')
+        hint_s = sub_font.render(hint_str, True, (140, 130, 170))
+        screen.blit(hint_s, hint_s.get_rect(centerx=w // 2, top=frame_y + title_h + pad * 2 + 24))
+
+        sub = sub_font.render('E = edit pieces   •   L = edit layout', True, (100, 90, 130))
+        screen.blit(sub, sub.get_rect(centerx=w // 2, top=frame_y + title_h + pad * 2 + 52))
 
         BEVEL = 2
         for label, rect in btns.items():

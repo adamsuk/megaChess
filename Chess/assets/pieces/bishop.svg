@@ -1,31 +1,46 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
-  <!--
-    Pixel art bishop: mitre hat body with left-face highlight, horizontal band
-    with accent gem, ball finial with shine, collar, raised base with drop shadow.
-  -->
-  <!-- Drop shadow -->
-  <rect x="10" y="72" width="60" height="5" rx="1" fill="{fill_lo}"/>
-  <!-- Base platform -->
-  <rect x="6"  y="62" width="68" height="14" rx="1" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Base top highlight -->
-  <rect x="7"  y="63" width="66" height="3" fill="{fill_hi}"/>
-  <!-- Base right shadow -->
-  <rect x="70" y="63" width="3"  height="12" fill="{fill_lo}"/>
-  <!-- Collar -->
-  <rect x="14" y="56" width="52" height="7" rx="1" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Collar top highlight -->
-  <rect x="15" y="57" width="50" height="2" fill="{fill_hi}"/>
-  <!-- Mitre body (9-point oval, pointed at top) -->
-  <polygon points="40,14 52,20 58,34 54,48 46,56 34,56 26,48 22,34 28,20"
-           fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Mitre left-face highlight -->
-  <polygon points="40,14 28,20 22,34 26,48 30,44 26,32 30,20 40,14" fill="{fill_hi}"/>
-  <!-- Horizontal band (traditional bishop mark) -->
-  <line x1="22" y1="34" x2="58" y2="34" stroke="{stroke}" stroke-width="3"/>
-  <!-- Accent gem at band centre -->
-  <circle cx="40" cy="34" r="4" fill="{accent}"/>
-  <!-- Ball finial -->
-  <circle cx="40" cy="10" r="9" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Ball shine -->
-  <circle cx="36" cy="7"  r="4" fill="{fill_hi}"/>
+  <!-- Pixel art bishop: 10x10 block grid, 8 units per block, rects only  -->
+  <!-- Tall pointed mitre tapering 2px → 8px, horizontal band + accent gem -->
+
+  <!-- Row 0: finial top (2px, cols 4-5) -->
+  <rect x="32" y="0"  width="16" height="8" fill="{stroke}"/>
+  <!-- Row 1: finial body (4px, cols 3-6) -->
+  <rect x="24" y="8"  width="8"  height="8" fill="{stroke}"/>
+  <rect x="32" y="8"  width="8"  height="8" fill="{fill_hi}"/>
+  <rect x="40" y="8"  width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="48" y="8"  width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 2: mitre narrow (4px, cols 3-6) -->
+  <rect x="24" y="16" width="8"  height="8" fill="{stroke}"/>
+  <rect x="32" y="16" width="8"  height="8" fill="{fill_hi}"/>
+  <rect x="40" y="16" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="48" y="16" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 3: mitre expanding (6px, cols 2-7) -->
+  <rect x="16" y="24" width="8"  height="8" fill="{stroke}"/>
+  <rect x="24" y="24" width="16" height="8" fill="{fill_hi}"/>
+  <rect x="40" y="24" width="16" height="8" fill="{fill_lo}"/>
+  <rect x="56" y="24" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 4: mitre widest (8px, cols 1-8) -->
+  <rect x="8"  y="32" width="8"  height="8" fill="{stroke}"/>
+  <rect x="16" y="32" width="24" height="8" fill="{fill_hi}"/>
+  <rect x="40" y="32" width="24" height="8" fill="{fill_lo}"/>
+  <rect x="64" y="32" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 5: horizontal band with accent gem (cols 1-8, A at col 4) -->
+  <rect x="8"  y="40" width="24" height="8" fill="{stroke}"/>
+  <rect x="32" y="40" width="8"  height="8" fill="{accent}"/>
+  <rect x="40" y="40" width="32" height="8" fill="{stroke}"/>
+  <!-- Row 6: body below band (6px, cols 2-7) -->
+  <rect x="16" y="48" width="8"  height="8" fill="{stroke}"/>
+  <rect x="24" y="48" width="16" height="8" fill="{fill_hi}"/>
+  <rect x="40" y="48" width="16" height="8" fill="{fill_lo}"/>
+  <rect x="56" y="48" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 7: collar (6px, cols 2-7) -->
+  <rect x="16" y="56" width="48" height="8" fill="{stroke}"/>
+  <!-- Row 8: base -->
+  <rect x="0"  y="64" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="64" width="16" height="8" fill="{fill_hi}"/>
+  <rect x="24" y="64" width="24" height="8" fill="{fill}"/>
+  <rect x="48" y="64" width="24" height="8" fill="{fill_lo}"/>
+  <rect x="72" y="64" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 9: base bottom -->
+  <rect x="0"  y="72" width="80" height="8" fill="{stroke}"/>
 </svg>

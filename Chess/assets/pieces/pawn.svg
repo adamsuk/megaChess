@@ -1,26 +1,49 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
-  <!--
-    Pixel art pawn: drop shadow, raised base, collar, tapering body, round head with shine.
-    Uses {fill} (base), {fill_hi} (highlight), {fill_lo} (shadow), {stroke} (outline), {accent}.
-  -->
-  <!-- Drop shadow -->
-  <rect x="14" y="70" width="52" height="6" rx="1" fill="{fill_lo}"/>
-  <!-- Base platform -->
-  <rect x="8"  y="63" width="64" height="11" rx="1" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Base top highlight strip -->
-  <rect x="9"  y="64" width="62" height="3" fill="{fill_hi}"/>
-  <!-- Base right shadow strip -->
-  <rect x="67" y="64" width="3"  height="8" fill="{fill_lo}"/>
-  <!-- Collar -->
-  <rect x="22" y="56" width="36" height="8" rx="1" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Collar top highlight -->
-  <rect x="23" y="57" width="34" height="2" fill="{fill_hi}"/>
-  <!-- Body (narrowing upward) -->
-  <polygon points="30,38 50,38 46,56 34,56" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Body left-face highlight -->
-  <polygon points="30,38 34,38 32,56 30,56" fill="{fill_hi}"/>
-  <!-- Head circle (main) -->
-  <circle cx="40" cy="26" r="17" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Head shine (top-left) -->
-  <circle cx="33" cy="20" r="8"  fill="{fill_hi}"/>
+  <!-- Pixel art pawn: 10x10 block grid, 8 units per block, rects only -->
+  <!-- head (5px wide, cols 3-7); shoulder (8px, cols 1-8); base (10px) -->
+
+  <!-- Row 0: head top outline -->
+  <rect x="32" y="0"  width="24" height="8" fill="{stroke}"/>
+  <!-- Row 1: head body -->
+  <rect x="24" y="8"  width="8"  height="8" fill="{stroke}"/>
+  <rect x="32" y="8"  width="8"  height="8" fill="{fill_hi}"/>
+  <rect x="40" y="8"  width="8"  height="8" fill="{fill}"/>
+  <rect x="48" y="8"  width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="56" y="8"  width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 2: head body -->
+  <rect x="24" y="16" width="8"  height="8" fill="{stroke}"/>
+  <rect x="32" y="16" width="8"  height="8" fill="{fill_hi}"/>
+  <rect x="40" y="16" width="8"  height="8" fill="{fill}"/>
+  <rect x="48" y="16" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="56" y="16" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 3: head bottom outline -->
+  <rect x="32" y="24" width="24" height="8" fill="{stroke}"/>
+  <!-- Row 4: shoulder connector -->
+  <rect x="8"  y="32" width="64" height="8" fill="{stroke}"/>
+  <!-- Row 5: shoulder body -->
+  <rect x="8"  y="40" width="8"  height="8" fill="{stroke}"/>
+  <rect x="16" y="40" width="8"  height="8" fill="{fill_hi}"/>
+  <rect x="24" y="40" width="24" height="8" fill="{fill}"/>
+  <rect x="48" y="40" width="16" height="8" fill="{fill_lo}"/>
+  <rect x="64" y="40" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 6: shoulder body -->
+  <rect x="8"  y="48" width="8"  height="8" fill="{stroke}"/>
+  <rect x="16" y="48" width="8"  height="8" fill="{fill_hi}"/>
+  <rect x="24" y="48" width="24" height="8" fill="{fill}"/>
+  <rect x="48" y="48" width="16" height="8" fill="{fill_lo}"/>
+  <rect x="64" y="48" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 7: base highlight strip -->
+  <rect x="0"  y="56" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="56" width="24" height="8" fill="{fill_hi}"/>
+  <rect x="32" y="56" width="16" height="8" fill="{fill}"/>
+  <rect x="48" y="56" width="24" height="8" fill="{fill_lo}"/>
+  <rect x="72" y="56" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 8: base body -->
+  <rect x="0"  y="64" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="64" width="8"  height="8" fill="{fill_hi}"/>
+  <rect x="16" y="64" width="48" height="8" fill="{fill}"/>
+  <rect x="64" y="64" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="72" y="64" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 9: base bottom outline -->
+  <rect x="0"  y="72" width="80" height="8" fill="{stroke}"/>
 </svg>

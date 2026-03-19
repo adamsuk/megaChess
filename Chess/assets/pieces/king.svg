@@ -1,35 +1,49 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
-  <!--
-    Pixel art king: prominent cross (vertical + horizontal bars each with highlight),
-    tapering crown body with left-face highlight and right-face shadow,
-    accent gem at cross centre, collar, raised base with drop shadow.
-  -->
-  <!-- Drop shadow -->
-  <rect x="8"  y="71" width="64" height="5" rx="1" fill="{fill_lo}"/>
-  <!-- Base platform -->
-  <rect x="6"  y="62" width="68" height="13" rx="1" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Base top highlight -->
-  <rect x="7"  y="63" width="66" height="3" fill="{fill_hi}"/>
-  <!-- Base right shadow -->
-  <rect x="70" y="63" width="3"  height="11" fill="{fill_lo}"/>
-  <!-- Collar -->
-  <rect x="10" y="55" width="60" height="8" rx="1" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Collar top highlight -->
-  <rect x="11" y="56" width="58" height="2" fill="{fill_hi}"/>
-  <!-- Crown body (trapezoid, wider at bottom) -->
-  <polygon points="18,30 62,30 68,55 12,55" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Crown body left-face highlight -->
-  <polygon points="18,30 24,30 18,55 12,55" fill="{fill_hi}"/>
-  <!-- Crown body right-face shadow -->
-  <polygon points="62,30 68,55 64,55 58,30" fill="{fill_lo}"/>
-  <!-- Cross vertical bar -->
-  <rect x="34" y="3"  width="12" height="30" rx="1" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Cross vertical highlight -->
-  <rect x="35" y="4"  width="4"  height="28" fill="{fill_hi}"/>
-  <!-- Cross horizontal bar -->
-  <rect x="20" y="10" width="40" height="12" rx="1" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Cross horizontal top highlight -->
-  <rect x="21" y="11" width="38" height="3" fill="{fill_hi}"/>
-  <!-- Cross centre accent gem -->
-  <rect x="36" y="12" width="8"  height="8" fill="{accent}"/>
+  <!-- Pixel art king: 10x10 block grid, 8 units per block, rects only     -->
+  <!-- Cross: vertical top (3px) + horizontal bar (7px, accent at centre)  -->
+  <!-- Crown body widens from 7px to 10px, collar, base                    -->
+
+  <!-- Row 0: cross vertical top (3px, cols 3-5) -->
+  <rect x="24" y="0"  width="24" height="8" fill="{stroke}"/>
+  <!-- Row 1: cross horizontal bar (7px, cols 1-7, accent at col 4) -->
+  <rect x="8"  y="8"  width="24" height="8" fill="{stroke}"/>
+  <rect x="32" y="8"  width="8"  height="8" fill="{accent}"/>
+  <rect x="40" y="8"  width="24" height="8" fill="{stroke}"/>
+  <!-- Row 2: cross vertical connecting (3px, cols 3-5, highlight in middle) -->
+  <rect x="24" y="16" width="8"  height="8" fill="{stroke}"/>
+  <rect x="32" y="16" width="8"  height="8" fill="{fill_hi}"/>
+  <rect x="40" y="16" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 3: crown upper (7px, cols 1-7) -->
+  <rect x="8"  y="24" width="8"  height="8" fill="{stroke}"/>
+  <rect x="16" y="24" width="24" height="8" fill="{fill_hi}"/>
+  <rect x="40" y="24" width="16" height="8" fill="{fill_lo}"/>
+  <rect x="56" y="24" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 4: crown (7px, cols 1-7) -->
+  <rect x="8"  y="32" width="8"  height="8" fill="{stroke}"/>
+  <rect x="16" y="32" width="16" height="8" fill="{fill_hi}"/>
+  <rect x="32" y="32" width="16" height="8" fill="{fill}"/>
+  <rect x="48" y="32" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="56" y="32" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 5: crown wider (10px, cols 0-9) -->
+  <rect x="0"  y="40" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="40" width="16" height="8" fill="{fill_hi}"/>
+  <rect x="24" y="40" width="24" height="8" fill="{fill}"/>
+  <rect x="48" y="40" width="24" height="8" fill="{fill_lo}"/>
+  <rect x="72" y="40" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 6: crown base (10px) -->
+  <rect x="0"  y="48" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="48" width="8"  height="8" fill="{fill_hi}"/>
+  <rect x="16" y="48" width="40" height="8" fill="{fill}"/>
+  <rect x="56" y="48" width="16" height="8" fill="{fill_lo}"/>
+  <rect x="72" y="48" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 7: collar (cols 1-7) -->
+  <rect x="8"  y="56" width="56" height="8" fill="{stroke}"/>
+  <!-- Row 8: base -->
+  <rect x="0"  y="64" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="64" width="16" height="8" fill="{fill_hi}"/>
+  <rect x="24" y="64" width="24" height="8" fill="{fill}"/>
+  <rect x="48" y="64" width="24" height="8" fill="{fill_lo}"/>
+  <rect x="72" y="64" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 9: base bottom -->
+  <rect x="0"  y="72" width="80" height="8" fill="{stroke}"/>
 </svg>

@@ -1240,7 +1240,18 @@ class BoardLayoutEditor:
     # Piece types in palette order
     PALETTE_PIECES = ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn']
 
-    def __init__(self, board_theme='Classic', piece_theme='Classic'):
+    # Shade control rows: (label, 'board'/'piece', sub-key or None, [color-keys])
+    _SHADE_CONTROLS = [
+        ('Light Squares', 'board', None,    ['light', 'light_hi', 'light_lo']),
+        ('Dark Squares',  'board', None,    ['dark',  'dark_hi',  'dark_lo']),
+        ('Holes',         'board', None,    ['hole',  'hole_hi',  'hole_lo']),
+        ('White Pieces',  'piece', 'white', ['fill', 'fill_hi', 'fill_lo', 'stroke', 'accent']),
+        ('Black Pieces',  'piece', 'black', ['fill', 'fill_hi', 'fill_lo', 'stroke', 'accent']),
+    ]
+    SHADE_STEP = 12
+
+    def __init__(self, board_theme='Classic', piece_theme='Classic',
+                 custom_board=None, custom_piece=None):
         pygame.init()
         info = pygame.display.Info()
         self.w = min(info.current_w, info.current_h)
@@ -1255,15 +1266,20 @@ class BoardLayoutEditor:
         self.board_theme = board_theme if board_theme in BOARD_THEMES else 'Classic'
         self.piece_theme = piece_theme if piece_theme in PIECE_THEMES else 'Classic'
 
+        # Custom shade overrides (None = use the selected theme's colours as-is)
+        self.custom_board = copy.deepcopy(custom_board) if custom_board else None
+        self.custom_piece = copy.deepcopy(custom_piece) if custom_piece else None
+
         # Piece icon rendering (for palette + board preview)
         self._pieces_defs = AllPieces().pieces_defs
         self.piece_icons = {}
         self._reload_icons()
 
     def _reload_icons(self):
-        """Re-render piece icons using the current piece theme."""
+        """Re-render piece icons using current piece colours (custom or theme)."""
         sq = self._board_sq_size(8)
         self.piece_icons = {}
+        colors = self.custom_piece if self.custom_piece else PIECE_THEMES[self.piece_theme]
         for piece_type, defn in self._pieces_defs.items():
             path = defn.get('icon')
             if not path:
@@ -1272,7 +1288,7 @@ class BoardLayoutEditor:
                 template = open(path).read()
             except (FileNotFoundError, OSError):
                 continue
-            for color_name, colours in PIECE_THEMES[self.piece_theme].items():
+            for color_name, colours in colors.items():
                 try:
                     svg = (template
                            .replace('{fill}',    colours['fill'])
@@ -1284,6 +1300,61 @@ class BoardLayoutEditor:
                     self.piece_icons[(piece_type, color_name)] = render_svg(svg, (px, px))
                 except Exception:
                     pass
+
+    # ------------------------------------------------------------------
+    # Shade helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _hex_to_rgb(h):
+        h = h.lstrip('#')
+        return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+    @staticmethod
+    def _rgb_to_hex(r, g, b):
+        return '#{:02X}{:02X}{:02X}'.format(r, g, b)
+
+    @staticmethod
+    def _clamp_rgb(rgb, delta):
+        return tuple(max(0, min(255, c + delta)) for c in rgb)
+
+    def _adjust_hex(self, h, delta):
+        return self._rgb_to_hex(*self._clamp_rgb(self._hex_to_rgb(h), delta))
+
+    def _apply_shade_delta(self, ctrl_idx, delta):
+        """Brighten or darken one shade category by delta steps."""
+        _, kind, sub, keys = self._SHADE_CONTROLS[ctrl_idx]
+        if kind == 'board':
+            if self.custom_board is None:
+                self.custom_board = copy.deepcopy(BOARD_THEMES[self.board_theme])
+            for k in keys:
+                if k in self.custom_board:
+                    self.custom_board[k] = self._clamp_rgb(self.custom_board[k], delta)
+        else:
+            if self.custom_piece is None:
+                self.custom_piece = copy.deepcopy(PIECE_THEMES[self.piece_theme])
+            for k in keys:
+                if k in self.custom_piece.get(sub, {}):
+                    self.custom_piece[sub][k] = self._adjust_hex(
+                        self.custom_piece[sub][k], delta)
+            self._reload_icons()
+
+    def _shade_rects(self, panel_x, panel_w, start_y):
+        """Return list of (minus_rect, swatch_rect, plus_rect) for each shade row."""
+        btn_w = max(20, panel_w // 9)
+        sw_w  = max(18, panel_w // 7)
+        row_h = 28
+        gap   = 5
+        rects = []
+        for i in range(len(self._SHADE_CONTROLS)):
+            y  = start_y + i * (row_h + gap)
+            cy = y + row_h // 2
+            mr = pygame.Rect(panel_x + panel_w - btn_w * 2 - sw_w - 8,
+                             cy - 11, btn_w, 22)
+            sr = pygame.Rect(mr.right + 4, cy - 9, sw_w, 18)
+            pr = pygame.Rect(sr.right + 4, cy - 11, btn_w, 22)
+            rects.append((mr, sr, pr))
+        return rects
 
     # ------------------------------------------------------------------
     # Geometry
@@ -1357,10 +1428,8 @@ class BoardLayoutEditor:
 
     def run(self):
         """
-        Show the editor.  Returns (layout_dict | None, saved_path | None).
-        layout_dict is the board matrix serialised like Board.to_dict(),
-        or None if the default layout should be used.
-        saved_path is set if the user hit Save.
+        Show the editor.  Returns (layout_dict, saved_path, board_theme,
+        piece_theme, custom_board, custom_piece).
         """
         layout = self._load_or_default()
         selected = ('white', 'pawn')
@@ -1372,9 +1441,22 @@ class BoardLayoutEditor:
         while True:
             board_size = layout.get('board_size', 8)
             mouse = pygame.mouse.get_pos()
-            _, oy = self._board_origin()
             btn_h  = 40
             btn_y  = self._btn_y(board_size)
+
+            # Pre-compute panel geometry (needed for shade rects)
+            px_th = self._panel_x(board_size)
+            pw_th = self.w - px_th - self.PADDING
+            pal_items = self._palette_rects(board_size)
+            theme_start_y = pal_items[-1][2].bottom + 10 if pal_items else 44 + 10
+            theme_rects_map = self._theme_rects(px_th, pw_th, theme_start_y)
+            # shade section starts just below the theme section
+            if theme_rects_map:
+                last_tr = max(r.bottom for r in theme_rects_map.values())
+                shade_start_y = last_tr + 12
+            else:
+                shade_start_y = theme_start_y + 100
+            shade_rects = self._shade_rects(px_th, pw_th, shade_start_y)
 
             for event in pygame.event.get():
                 if event.type == locals.QUIT:
@@ -1382,7 +1464,8 @@ class BoardLayoutEditor:
                     sys.exit()
 
                 if event.type == locals.KEYDOWN and event.key == locals.K_ESCAPE:
-                    return layout, saved_path, self.board_theme, self.piece_theme
+                    return (layout, saved_path, self.board_theme, self.piece_theme,
+                            self.custom_board, self.custom_piece)
 
                 if event.type == locals.MOUSEBUTTONDOWN:
                     mx, my = event.pos
@@ -1393,18 +1476,15 @@ class BoardLayoutEditor:
                         bx, by = sq_coord
                         cell = layout['matrix'][bx][by]
                         if event.button == 3:
-                            # Right-click: always clear (removes pieces and holes)
                             layout['matrix'][bx][by] = None
                         elif event.button == 1:
                             if selected == 'hole':
-                                # Toggle hole: punch in or restore to empty
                                 layout['matrix'][bx][by] = None if cell == 'hole' else 'hole'
                             else:
                                 color_str, piece_type = selected
                                 if (isinstance(cell, dict)
                                         and cell['piece_type'] == piece_type
                                         and cell['color'] == color_str):
-                                    # Same piece clicked again → remove
                                     layout['matrix'][bx][by] = None
                                 else:
                                     layout['matrix'][bx][by] = {
@@ -1424,8 +1504,8 @@ class BoardLayoutEditor:
                         status_msg = f'Board size: {board_size + 1}×{board_size + 1}'
                         status_until = pygame.time.get_ticks() + 2000
 
-                    # Palette click: change selection
-                    for color_str, piece_type, rect in self._palette_rects(board_size):
+                    # Palette click
+                    for color_str, piece_type, rect in pal_items:
                         if rect.collidepoint(mx, my):
                             selected = 'hole' if color_str == 'hole' else (color_str, piece_type)
 
@@ -1436,29 +1516,31 @@ class BoardLayoutEditor:
                             status_msg = f'Loaded preset: {preset_name}'
                             status_until = pygame.time.get_ticks() + 2500
 
-                    # Theme selector clicks
-                    pal_items = self._palette_rects(board_size)
-                    theme_start_y = pal_items[-1][2].bottom + 10 if pal_items else 44 + 10
-                    px_th = self._panel_x(board_size)
-                    pw_th = self.w - px_th - self.PADDING
-                    for (kind, name), rect in self._theme_rects(px_th, pw_th, theme_start_y).items():
+                    # Theme selector clicks — reset custom shades when theme changes
+                    for (kind, name), rect in theme_rects_map.items():
                         if rect.collidepoint(mx, my):
                             if kind == 'board':
                                 self.board_theme = name
+                                self.custom_board = None
                             else:
                                 self.piece_theme = name
+                                self.custom_piece = None
                                 self._reload_icons()
-                            # Auto-save theme choice
-                            os.makedirs(os.path.dirname(_CUSTOM_THEME_PATH), exist_ok=True)
-                            with open(_CUSTOM_THEME_PATH, 'w') as _tf:
-                                json.dump({'board_theme': self.board_theme,
-                                           'piece_theme': self.piece_theme}, _tf)
+                            self._save_theme_file()
+
+                    # Shade +/- clicks
+                    for i, (mr, sr, pr) in enumerate(shade_rects):
+                        if mr.collidepoint(mx, my):
+                            self._apply_shade_delta(i, -self.SHADE_STEP)
+                        elif pr.collidepoint(mx, my):
+                            self._apply_shade_delta(i, +self.SHADE_STEP)
 
                     # Button clicks
                     for label, rect in self._button_rects(btn_y, btn_h, board_size).items():
                         if rect.collidepoint(mx, my):
                             if label == '← Back':
-                                return layout, saved_path, self.board_theme, self.piece_theme
+                                return (layout, saved_path, self.board_theme,
+                                        self.piece_theme, self.custom_board, self.custom_piece)
                             elif label == 'Reset':
                                 layout = self._default_layout()
                                 saved_path = None
@@ -1466,14 +1548,18 @@ class BoardLayoutEditor:
                                 status_until = pygame.time.get_ticks() + 2500
                             elif label == 'Save':
                                 self._save(layout)
+                                self._save_theme_file()
                                 saved_path = _CUSTOM_LAYOUT_PATH
-                                status_msg = 'Saved to defs/custom_layout.json'
+                                status_msg = 'Saved'
                                 status_until = pygame.time.get_ticks() + 2500
                             elif label == 'Play':
-                                return layout, saved_path, self.board_theme, self.piece_theme
+                                return (layout, saved_path, self.board_theme,
+                                        self.piece_theme, self.custom_board, self.custom_piece)
 
             self._draw(layout, selected, mouse, btn_y, btn_h,
-                       status_msg if pygame.time.get_ticks() < status_until else '')
+                       status_msg if pygame.time.get_ticks() < status_until else '',
+                       shade_rects, shade_start_y, px_th, pw_th,
+                       theme_rects_map, theme_start_y)
             pygame.display.update()
             clock.tick(60)
 
@@ -1567,6 +1653,16 @@ class BoardLayoutEditor:
         with open(_CUSTOM_LAYOUT_PATH, 'w') as f:
             json.dump(layout, f, indent=2)
 
+    def _save_theme_file(self):
+        os.makedirs(os.path.dirname(_CUSTOM_THEME_PATH), exist_ok=True)
+        data = {'board_theme': self.board_theme, 'piece_theme': self.piece_theme}
+        if self.custom_board is not None:
+            data['custom_board'] = {k: list(v) for k, v in self.custom_board.items()}
+        if self.custom_piece is not None:
+            data['custom_piece'] = self.custom_piece
+        with open(_CUSTOM_THEME_PATH, 'w') as f:
+            json.dump(data, f, indent=2)
+
     # ------------------------------------------------------------------
     # Drawing
     # ------------------------------------------------------------------
@@ -1604,7 +1700,9 @@ class BoardLayoutEditor:
             rects[('piece', name)] = pygame.Rect(x, y, bw, bh)
         return rects
 
-    def _draw(self, layout, selected, mouse, btn_y, btn_h, status_msg):
+    def _draw(self, layout, selected, mouse, btn_y, btn_h, status_msg,
+              shade_rects, shade_start_y, _panel_x_unused, _panel_w_unused,
+              theme_rects_map, theme_start_y):
         board_size = layout.get('board_size', 8)
         self.screen.fill(self.BG)
 
@@ -1619,7 +1717,7 @@ class BoardLayoutEditor:
 
         sq = self._board_sq_size(board_size)
         ox, oy = self._board_origin()
-        t = BOARD_THEMES[self.board_theme]
+        t = self.custom_board if self.custom_board else BOARD_THEMES[self.board_theme]
 
         # Pixel art frame around board: teal outer + dark inner + corner accents
         board_px = sq * board_size
@@ -1767,22 +1865,14 @@ class BoardLayoutEditor:
             self.screen.blit(lbl, lbl.get_rect(centery=rect.centery, left=icon_x + 28))
 
         # ── Themes panel ─────────────────────────────────────────────────
-        # Positioned below palette items, above preset/action buttons
-        pal_items = self._palette_rects(board_size)
-        if pal_items:
-            theme_start_y = pal_items[-1][2].bottom + 10
-        else:
-            theme_start_y = oy + 10
-        theme_rects = self._theme_rects(px, pw, theme_start_y)
-
         thdr = self.tiny_font.render('BOARD THEME', True, self.TITLE_COLOR)
         self.screen.blit(thdr, (px, theme_start_y + 2))
         phdr = self.tiny_font.render('PIECE THEME', True, self.TITLE_COLOR)
         bh_row = list(BOARD_THEMES.keys())[0]
-        phdr_y = theme_rects[('board', bh_row)].bottom + 6
+        phdr_y = theme_rects_map[('board', bh_row)].bottom + 6
         self.screen.blit(phdr, (px, phdr_y))
 
-        for (kind, name), rect in theme_rects.items():
+        for (kind, name), rect in theme_rects_map.items():
             active = (name == self.board_theme if kind == 'board'
                       else name == self.piece_theme)
             hov = rect.collidepoint(*mouse)
@@ -1792,6 +1882,39 @@ class BoardLayoutEditor:
                                  name, self.tiny_font, tc)
             if active:
                 pygame.draw.rect(self.screen, Colours.HIGH, rect, 2)
+
+        # ── Shade controls ────────────────────────────────────────────────
+        shade_hdr = self.tiny_font.render('SHADES  [ - darker   + brighter ]',
+                                          True, self.TITLE_COLOR)
+        self.screen.blit(shade_hdr, (px, shade_start_y - 14))
+        for i, (label, kind, sub, keys) in enumerate(self._SHADE_CONTROLS):
+            mr, sr, pr = shade_rects[i]
+            # Label
+            ls = self.tiny_font.render(label, True, self.TEXT)
+            self.screen.blit(ls, (px, mr.centery - ls.get_height() // 2))
+            # Swatch colour sample
+            if kind == 'board':
+                bc = self.custom_board if self.custom_board else BOARD_THEMES[self.board_theme]
+                swatch_col = bc[keys[0]]
+            else:
+                pc = self.custom_piece if self.custom_piece else PIECE_THEMES[self.piece_theme]
+                r, g, b = self._hex_to_rgb(pc[sub][keys[0]])
+                swatch_col = (r, g, b)
+            # Minus button
+            hm = mr.collidepoint(*mouse)
+            pygame.draw.rect(self.screen, (60, 30, 30) if hm else (40, 20, 20), mr)
+            pygame.draw.rect(self.screen, (140, 70, 70), mr, 1)
+            ms = self.tiny_font.render('-', True, (220, 140, 140))
+            self.screen.blit(ms, ms.get_rect(center=mr.center))
+            # Colour swatch
+            pygame.draw.rect(self.screen, swatch_col, sr)
+            pygame.draw.rect(self.screen, (70, 70, 100), sr, 1)
+            # Plus button
+            hp = pr.collidepoint(*mouse)
+            pygame.draw.rect(self.screen, (30, 60, 30) if hp else (20, 40, 20), pr)
+            pygame.draw.rect(self.screen, (70, 140, 70), pr, 1)
+            ps = self.tiny_font.render('+', True, (140, 220, 140))
+            self.screen.blit(ps, ps.get_rect(center=pr.center))
 
         # Preset buttons (row above the action buttons)
         preset_rects = self._preset_rects(btn_y, btn_h, board_size)
@@ -1820,266 +1943,6 @@ class BoardLayoutEditor:
         if status_msg:
             sm = self.small_font.render(status_msg, True, Colours.GOLD)
             self.screen.blit(sm, (ox, btn_y - 22))
-
-
-class ShadeEditor:
-    """Interactive brightness editor for board and piece colour themes."""
-
-    BG   = (12, 10, 24)
-    STEP = 12
-
-    # Control rows: (label, 'board'/'piece', sub-key or None, [color-keys])
-    _CONTROLS = [
-        ('Board Light Squares', 'board', None,    ['light', 'light_hi', 'light_lo']),
-        ('Board Dark Squares',  'board', None,    ['dark',  'dark_hi',  'dark_lo']),
-        ('Board Holes',         'board', None,    ['hole',  'hole_hi',  'hole_lo']),
-        ('White Pieces',        'piece', 'white', ['fill', 'fill_hi', 'fill_lo', 'stroke', 'accent']),
-        ('Black Pieces',        'piece', 'black', ['fill', 'fill_hi', 'fill_lo', 'stroke', 'accent']),
-    ]
-
-    def __init__(self, board_theme='Classic', piece_theme='Classic',
-                 custom_board=None, custom_piece=None):
-        self.screen = pygame.display.get_surface()
-        self.w, self.h = self.screen.get_size()
-        self.board_colors = copy.deepcopy(
-            custom_board if custom_board else BOARD_THEMES[board_theme])
-        self.piece_colors = copy.deepcopy(
-            custom_piece if custom_piece else PIECE_THEMES[piece_theme])
-        self.font = pygame.font.Font('freesansbold.ttf', 14)
-        self._templates = {}   # piece_type -> svg template string
-        self._icons = {}       # (piece_type, color) -> surface
-        self._load_templates()
-        self._reload_icons()
-
-    # ------------------------------------------------------------------ helpers
-
-    def _load_templates(self):
-        for path in [_DEFAULT_PIECES_PATH, _CUSTOM_PIECES_PATH]:
-            if not os.path.exists(path):
-                continue
-            try:
-                with open(path) as f:
-                    defs = json.load(f)
-            except Exception:
-                continue
-            for piece_type, defn in defs.items():
-                icon_path = defn.get('icon')
-                if not icon_path:
-                    continue
-                try:
-                    self._templates[piece_type] = open(icon_path).read()
-                except Exception:
-                    pass
-
-    def _hex_to_rgb(self, h):
-        h = h.lstrip('#')
-        return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
-
-    def _rgb_to_hex(self, r, g, b):
-        return '#{:02X}{:02X}{:02X}'.format(r, g, b)
-
-    def _clamp_rgb(self, rgb, delta):
-        return tuple(max(0, min(255, c + delta)) for c in rgb)
-
-    def _adjust_hex(self, h, delta):
-        return self._rgb_to_hex(*self._clamp_rgb(self._hex_to_rgb(h), delta))
-
-    def _apply_delta(self, ctrl_idx, delta):
-        label, kind, sub, keys = self._CONTROLS[ctrl_idx]
-        if kind == 'board':
-            for k in keys:
-                if k in self.board_colors:
-                    self.board_colors[k] = self._clamp_rgb(self.board_colors[k], delta)
-        else:
-            for k in keys:
-                if k in self.piece_colors.get(sub, {}):
-                    self.piece_colors[sub][k] = self._adjust_hex(
-                        self.piece_colors[sub][k], delta)
-        self._reload_icons()
-
-    def _reload_icons(self):
-        self._icons.clear()
-        px = 48
-        for piece_type, template in self._templates.items():
-            for color_name in ('white', 'black'):
-                colours = self.piece_colors.get(color_name, {})
-                if not colours:
-                    continue
-                try:
-                    svg = (template
-                           .replace('{fill}',    colours['fill'])
-                           .replace('{fill_hi}', colours['fill_hi'])
-                           .replace('{fill_lo}', colours['fill_lo'])
-                           .replace('{stroke}',  colours['stroke'])
-                           .replace('{accent}',  colours['accent']))
-                    self._icons[(piece_type, color_name)] = render_svg(svg, (px, px))
-                except Exception:
-                    pass
-
-    # ----------------------------------------------------------------- drawing
-
-    def _draw_board_preview(self, cell=22, n=8):
-        bx = 40
-        by = 70
-        bc = self.board_colors
-        for row in range(n):
-            for col in range(n):
-                is_l = (row + col) % 2 == 0
-                color = bc['light'] if is_l else bc['dark']
-                hi    = bc['light_hi'] if is_l else bc['dark_hi']
-                lo    = bc['light_lo'] if is_l else bc['dark_lo']
-                rx, ry = bx + col * cell, by + row * cell
-                pygame.draw.rect(self.screen, color, (rx, ry, cell, cell))
-                pygame.draw.rect(self.screen, hi, (rx, ry, cell, 2))
-                pygame.draw.rect(self.screen, hi, (rx, ry, 2, cell))
-                pygame.draw.rect(self.screen, lo, (rx, ry + cell - 2, cell, 2))
-                pygame.draw.rect(self.screen, lo, (rx + cell - 2, ry, 2, cell))
-        pygame.draw.rect(self.screen, (80, 80, 110), (bx, by, n * cell, n * cell), 1)
-        lbl = self.font.render('Board', True, (120, 110, 150))
-        self.screen.blit(lbl, (bx, by - 18))
-        return bx, by, n * cell, n * cell
-
-    def _draw_piece_preview(self, board_bx, board_bw):
-        px_size = 48
-        gap = 4
-        px = board_bx + board_bw + 40
-        py = 70
-        piece_types = list(self._templates.keys())
-        cols = min(len(piece_types), 8)
-        lbl = self.font.render('Pieces', True, (120, 110, 150))
-        self.screen.blit(lbl, (px, py - 18))
-        for j, pt in enumerate(piece_types[:cols]):
-            for row, color_name in enumerate(('white', 'black')):
-                ix = px + j * (px_size + gap)
-                iy = py + row * (px_size + gap)
-                bg = (200, 200, 200) if color_name == 'white' else (30, 25, 45)
-                pygame.draw.rect(self.screen, bg, (ix, iy, px_size, px_size))
-                icon = self._icons.get((pt, color_name))
-                if icon:
-                    self.screen.blit(icon, (ix, iy))
-                pygame.draw.rect(self.screen, (60, 60, 80), (ix, iy, px_size, px_size), 1)
-
-    def _draw_btn(self, rect, base_col, text, hovered):
-        bg = tuple(min(c + 35, 255) for c in base_col) if hovered else base_col
-        hi = tuple(min(c + 55, 255) for c in base_col)
-        lo = tuple(max(c - 20,  0) for c in base_col)
-        pygame.draw.rect(self.screen, bg, rect)
-        pygame.draw.line(self.screen, hi, rect.topleft,    rect.topright,    2)
-        pygame.draw.line(self.screen, hi, rect.topleft,    rect.bottomleft,  2)
-        pygame.draw.line(self.screen, lo, rect.bottomleft, rect.bottomright, 2)
-        pygame.draw.line(self.screen, lo, rect.topright,   rect.bottomright, 2)
-        lbl_s = _pixel_text(text, 18, (220, 225, 235), bold=True)
-        self.screen.blit(lbl_s, lbl_s.get_rect(center=rect.center))
-
-    # ------------------------------------------------------------------ run
-
-    def run(self):
-        """Run the shade editor. Returns (board_colors, piece_colors, saved)."""
-        clock   = pygame.time.Clock()
-        w, h    = self.w, self.h
-        saved   = False
-
-        # Control row layout
-        ctrl_x     = 40
-        ctrl_top   = 240
-        ctrl_h     = 36
-        ctrl_gap   = 8
-        lbl_w      = 170
-        btn_w      = 34
-        btn_h      = 28
-        sw_w       = 80
-        sw_h       = 22
-
-        def _ctrl_rects(i):
-            y = ctrl_top + i * (ctrl_h + ctrl_gap)
-            cy = y + ctrl_h // 2
-            mr = pygame.Rect(ctrl_x + lbl_w, cy - btn_h // 2, btn_w, btn_h)
-            sr = pygame.Rect(mr.right + 6,   cy - sw_h // 2,  sw_w,  sw_h)
-            pr = pygame.Rect(sr.right + 6,   cy - btn_h // 2, btn_w, btn_h)
-            return mr, sr, pr
-
-        ctrl_rects = [_ctrl_rects(i) for i in range(len(self._CONTROLS))]
-
-        footer_y = h - 60
-        save_rect = pygame.Rect(w // 2 - 115, footer_y, 100, 38)
-        back_rect = pygame.Rect(w // 2 + 15,  footer_y, 100, 38)
-
-        while True:
-            mx, my = pygame.mouse.get_pos()
-
-            for event in pygame.event.get():
-                if event.type == locals.QUIT:
-                    pygame.quit()
-                    sys.exit()
-                if event.type == locals.KEYDOWN and event.key == locals.K_ESCAPE:
-                    return self.board_colors, self.piece_colors, saved
-                if event.type == locals.MOUSEBUTTONDOWN:
-                    if save_rect.collidepoint(mx, my):
-                        saved = True
-                        return self.board_colors, self.piece_colors, saved
-                    if back_rect.collidepoint(mx, my):
-                        return self.board_colors, self.piece_colors, saved
-                    for i, (mr, sr, pr) in enumerate(ctrl_rects):
-                        if mr.collidepoint(mx, my):
-                            self._apply_delta(i, -self.STEP)
-                        elif pr.collidepoint(mx, my):
-                            self._apply_delta(i, +self.STEP)
-
-            # Background
-            self.screen.fill(self.BG)
-
-            # Title
-            ts = _pixel_text('SHADE EDITOR', 36, (180, 200, 220), bold=True)
-            self.screen.blit(ts, ts.get_rect(centerx=w // 2, top=14))
-
-            # Previews
-            bx, by, bw2, _ = self._draw_board_preview()
-            self._draw_piece_preview(bx, bw2)
-
-            # Control rows
-            for i, (label, kind, sub, keys) in enumerate(self._CONTROLS):
-                y   = ctrl_top + i * (ctrl_h + ctrl_gap)
-                mr, sr, pr = ctrl_rects[i]
-
-                # Label
-                ls = self.font.render(label, True, (180, 175, 210))
-                self.screen.blit(ls, (ctrl_x, y + (ctrl_h - ls.get_height()) // 2))
-
-                # Swatch colour sample
-                if kind == 'board':
-                    swatch_col = self.board_colors[keys[0]]
-                else:
-                    swatch_col = self._hex_to_rgb(self.piece_colors[sub][keys[0]])
-
-                # Minus button
-                hm = mr.collidepoint(mx, my)
-                pygame.draw.rect(self.screen, (60, 30, 30) if hm else (40, 20, 20), mr)
-                pygame.draw.rect(self.screen, (150, 80, 80), mr, 1)
-                ms = self.font.render('-', True, (220, 150, 150))
-                self.screen.blit(ms, ms.get_rect(center=mr.center))
-
-                # Colour swatch
-                pygame.draw.rect(self.screen, swatch_col, sr)
-                pygame.draw.rect(self.screen, (80, 80, 110), sr, 1)
-
-                # Plus button
-                hp = pr.collidepoint(mx, my)
-                pygame.draw.rect(self.screen, (30, 60, 30) if hp else (20, 40, 20), pr)
-                pygame.draw.rect(self.screen, (80, 150, 80), pr, 1)
-                ps = self.font.render('+', True, (150, 220, 150))
-                self.screen.blit(ps, ps.get_rect(center=pr.center))
-
-            # Footer hint
-            hint = self.font.render('[-] darker   [+] brighter   Esc = back without saving',
-                                    True, (80, 75, 100))
-            self.screen.blit(hint, hint.get_rect(centerx=w // 2, bottom=footer_y - 8))
-
-            # Save / Back
-            self._draw_btn(save_rect, (30, 100, 55), 'Save',  save_rect.collidepoint(mx, my))
-            self._draw_btn(back_rect, (80, 40, 100), 'Back',  back_rect.collidepoint(mx, my))
-
-            pygame.display.update()
-            clock.tick(60)
 
 
 def _make_layout(board_size, matrix):
@@ -2182,32 +2045,28 @@ def _preset_hexagon():
 
 def _start_menu(screen, w, h):
     """
-    Simple title screen.  Returns 'play', 'edit_pieces', 'edit_layout', or 'edit_shades'.
+    Simple title screen.  Returns 'play', 'edit_pieces', or 'edit_layout'.
     """
     pygame.display.set_caption('megaChess')
     clock = pygame.time.Clock()
-    bw, bh = 160, 52
-    gap = 14
-    total_w = bw * 4 + gap * 3
+    bw, bh = 210, 56
+    gap = 16
+    total_w = bw * 3 + gap * 2
     x0 = w // 2 - total_w // 2
-    btn_y = h * 2 // 3
     btns = {
-        'Play':         pygame.Rect(x0,                   btn_y, bw, bh),
-        'Edit Pieces':  pygame.Rect(x0 + (bw + gap),      btn_y, bw, bh),
-        'Edit Layout':  pygame.Rect(x0 + (bw + gap) * 2,  btn_y, bw, bh),
-        'Edit Shades':  pygame.Rect(x0 + (bw + gap) * 3,  btn_y, bw, bh),
+        'Play':         pygame.Rect(x0,                   h * 2 // 3, bw, bh),
+        'Edit Pieces':  pygame.Rect(x0 + (bw + gap),      h * 2 // 3, bw, bh),
+        'Edit Layout':  pygame.Rect(x0 + (bw + gap) * 2,  h * 2 // 3, bw, bh),
     }
     btn_colors = {
         'Play':        (30,  75, 150),
         'Edit Pieces': (30, 100,  55),
         'Edit Layout': (90,  40, 120),
-        'Edit Shades': (110,  70,  20),
     }
     key_map = {
         'Play':        'play',
         'Edit Pieces': 'edit_pieces',
         'Edit Layout': 'edit_layout',
-        'Edit Shades': 'edit_shades',
     }
 
     # Pre-build pixel-art grid overlay (subtle tile grid)
@@ -2263,8 +2122,6 @@ def _start_menu(screen, w, h):
                     return 'edit_pieces'
                 if event.key == locals.K_l:
                     return 'edit_layout'
-                if event.key == locals.K_s:
-                    return 'edit_shades'
 
         screen.fill((10, 8, 20))
         # Pixel-art grid + corner chess board decorations
@@ -2309,7 +2166,7 @@ def _start_menu(screen, w, h):
         hint_s = _pixel_text(hint_str, 16, (140, 130, 170), bold=True)
         screen.blit(hint_s, hint_s.get_rect(centerx=w // 2, top=frame_y + title_h + pad * 2 + 24))
 
-        sub = _pixel_text('E = edit pieces   *   L = edit layout   *   S = shades', 16, (100, 90, 130), bold=True)
+        sub = _pixel_text('E = edit pieces   *   L = edit layout', 16, (100, 90, 130), bold=True)
         screen.blit(sub, sub.get_rect(centerx=w // 2, top=frame_y + title_h + pad * 2 + 52))
 
         BEVEL = 2
@@ -2374,22 +2231,6 @@ def main():
         except (OSError, json.JSONDecodeError):
             pass
 
-    def _save_theme():
-        os.makedirs(os.path.dirname(_CUSTOM_THEME_PATH), exist_ok=True)
-        data = {'board_theme': board_theme, 'piece_theme': piece_theme}
-        if custom_board is not None:
-            data['custom_board'] = {k: list(v) for k, v in custom_board.items()}
-        if custom_piece is not None:
-            data['custom_piece'] = custom_piece
-        with open(_CUSTOM_THEME_PATH, 'w') as _f:
-            json.dump(data, _f, indent=2)
-
-    def _effective_board_colors():
-        return custom_board if custom_board else BOARD_THEMES[board_theme]
-
-    def _effective_piece_colors():
-        return custom_piece if custom_piece else PIECE_THEMES[piece_theme]
-
     while True:
         choice = _start_menu(screen, w, h)
         if choice == 'edit_pieces':
@@ -2397,19 +2238,12 @@ def main():
             if saved_path:
                 custom_defs = defs
         elif choice == 'edit_layout':
-            layout, saved_path, board_theme, piece_theme = BoardLayoutEditor(
-                board_theme=board_theme, piece_theme=piece_theme).run()
-            if saved_path:
-                custom_layout = layout
-                _save_theme()
-        elif choice == 'edit_shades':
-            _cb, _cp, saved = ShadeEditor(
+            (layout, saved_path, board_theme, piece_theme,
+             custom_board, custom_piece) = BoardLayoutEditor(
                 board_theme=board_theme, piece_theme=piece_theme,
                 custom_board=custom_board, custom_piece=custom_piece).run()
-            if saved:
-                custom_board = _cb
-                custom_piece = _cp
-                _save_theme()
+            if saved_path:
+                custom_layout = layout
         else:
             game = Game()
             game.graphics.board_theme = board_theme

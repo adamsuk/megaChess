@@ -22,9 +22,29 @@ except NameError:
     xrange = range
 
 
+def _load_dotenv():
+    """Load key=value pairs from a .env file next to game.py into os.environ."""
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+    if not os.path.exists(env_path):
+        return
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            key, _, value = line.partition('=')
+            os.environ.setdefault(key.strip(), value.strip())
+
+_load_dotenv()
+
+
 def _on_android():
-    """Return True when running on Android (Pydroid3, Buildozer, or any python-for-android env)."""
-    return 'ANDROID_ARGUMENT' in os.environ or os.path.exists('/system/build.prop')
+    """Return True when running on Android (Pydroid3, Buildozer, .env override, or any python-for-android env)."""
+    return (
+        os.environ.get('ANDROID', '').lower() in ('1', 'true')
+        or 'ANDROID_ARGUMENT' in os.environ
+        or os.path.exists('/system/build.prop')
+    )
 
 
 def _pixel_text(text, size, color, bold=False):

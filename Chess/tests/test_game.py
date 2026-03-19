@@ -70,6 +70,7 @@ def make_graphics_stub(square_size=80):
     g.frame_size = 0
     g.board_theme = 'Classic'
     g.piece_theme = 'Classic'
+    g._s = 1.0
     return g
 
 

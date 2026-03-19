@@ -143,6 +143,23 @@ def _draw_icon(surf, name, cx, cy, sz, col):
                 pygame.draw.rect(surf, col, (dx, dy, qs, qs))
 
 
+def _ui_scale(w, h):
+    """Return a UI scale multiplier based on screen size.
+
+    On Android, fonts/controls were designed for ~480px, so larger screens
+    need proportional scaling (e.g. 1080px → 2.25×).  On desktop the
+    system DPI keeps everything readable without scaling.
+    """
+    if not _on_android():
+        return 1.0
+    return min(min(w, h) / 480.0, 3.0)
+
+
+def _fz(base, scale):
+    """Scale base font size by scale, keeping at least base."""
+    return max(base, int(round(base * scale)))
+
+
 class Game:
 
     def __init__(self):
@@ -342,9 +359,12 @@ class Graphics:
 
         pygame.init()
         info = pygame.display.Info()
-        self.button_bar_height = 48
         _android = _on_android()
         _flags = pygame.FULLSCREEN if _android else 0
+        # Scale all UI dimensions to the screen size on Android.
+        # button_bar_height must be known before window_size calculation.
+        self._s = _ui_scale(info.current_w, info.current_h)
+        self.button_bar_height = _fz(48, self._s)
         self.window_size = max(0, min(info.current_w, info.current_h - self.button_bar_height))
         if _android:
             self.screen_w = info.current_w
@@ -370,7 +390,7 @@ class Graphics:
         self.highlights = False
         self.show_hints = True   # toggle: show piece selection + legal-move highlighting
 
-        self.frame_size = 28     # pixel border around board for coordinate labels
+        self.frame_size = min(48, _fz(28, self._s))  # border for coord labels, capped so board stays large
         self.board_theme = 'Classic'
         self.piece_theme = 'Classic'
 
@@ -507,8 +527,8 @@ class Graphics:
             pygame.draw.line(self.screen, blo, rect.bottomleft, rect.bottomright, BEVEL)
             pygame.draw.line(self.screen, blo, rect.topright,   rect.bottomright, BEVEL)
             # Icon + label centred in button
-            text_s   = _pixel_text(label, 16, tc, bold=True)
-            shadow_s = _pixel_text(label, 16, (0, 0, 0), bold=True)
+            text_s   = _pixel_text(label, _fz(16, self._s), tc, bold=True)
+            shadow_s = _pixel_text(label, _fz(16, self._s), (0, 0, 0), bold=True)
             total_w = ICN + 4 + text_s.get_width()
             ix = rect.centerx - total_w // 2 + ICN // 2
             tx = rect.centerx - total_w // 2 + ICN + 4
@@ -945,10 +965,14 @@ class PieceEditor:
         self.screen = pygame.display.set_mode((self.w, self.h), _flags)
         pygame.display.set_caption('megaChess — piece editor')
         self._piece_names_cache = []
-        self.title_font = pygame.font.Font('freesansbold.ttf', 32)
-        self.label_font = pygame.font.Font('freesansbold.ttf', 22)
-        self.small_font = pygame.font.Font('freesansbold.ttf', 16)
-        self.tiny_font  = pygame.font.Font('freesansbold.ttf', 13)
+        _s = _ui_scale(self.w, self.h)
+        self.title_font = pygame.font.Font('freesansbold.ttf', _fz(32, _s))
+        self.label_font = pygame.font.Font('freesansbold.ttf', _fz(22, _s))
+        self.small_font = pygame.font.Font('freesansbold.ttf', _fz(16, _s))
+        self.tiny_font  = pygame.font.Font('freesansbold.ttf', _fz(13, _s))
+        # Override class constants with scaled instance values
+        self.PADDING  = _fz(16, _s)
+        self.HEADER_H = _fz(56, _s)
 
     @property
     def _portrait(self):
@@ -1494,10 +1518,14 @@ class BoardLayoutEditor:
         self.h = info.current_h if _android else self.w
         self.screen = pygame.display.set_mode((self.w, self.h), _flags)
         pygame.display.set_caption('megaChess — board layout editor')
-        self.title_font = pygame.font.Font('freesansbold.ttf', 28)
-        self.label_font = pygame.font.Font('freesansbold.ttf', 18)
-        self.small_font = pygame.font.Font('freesansbold.ttf', 14)
-        self.tiny_font  = pygame.font.Font('freesansbold.ttf', 12)
+        _s = _ui_scale(self.w, self.h)
+        self.title_font = pygame.font.Font('freesansbold.ttf', _fz(28, _s))
+        self.label_font = pygame.font.Font('freesansbold.ttf', _fz(18, _s))
+        self.small_font = pygame.font.Font('freesansbold.ttf', _fz(14, _s))
+        self.tiny_font  = pygame.font.Font('freesansbold.ttf', _fz(12, _s))
+        # Override class constants with scaled instance values
+        self.PADDING  = _fz(14, _s)
+        self.HEADER_H = _fz(48, _s)
 
         self.board_theme = board_theme if board_theme in BOARD_THEMES else 'Classic'
         self.piece_theme = piece_theme if piece_theme in PIECE_THEMES else 'Classic'
@@ -2369,7 +2397,8 @@ def _start_menu(screen, w, h):
     """
     pygame.display.set_caption('megaChess')
     clock = pygame.time.Clock()
-    gap = 16
+    _s = _ui_scale(w, h)
+    gap = _fz(16, _s)
     _portrait = h > w * 1.1
     # All content (corners, title, buttons) is laid out within eff_h = min(w, h).
     # The dark background fills the full h, keeping the screen full-height on Android
@@ -2377,12 +2406,13 @@ def _start_menu(screen, w, h):
     eff_h = min(w, h)
     _corner_sz = 14 * 4   # _cell * 4, matches corner decoration built below
     if _portrait:
+        bh = _fz(56, _s)
         bw = w - gap * 2
-        bh = 56
         x0 = gap
         btn_area_h = bh * 3 + gap * 2
-        frame_y = eff_h // 5
-        y0 = eff_h * 2 // 3
+        frame_y = max(gap * 2, eff_h // 8)
+        # y0: start buttons so they fit entirely within eff_h
+        y0 = eff_h - btn_area_h - gap
         btns = {
             'Play':        pygame.Rect(x0, y0,                  bw, bh),
             'Edit Pieces': pygame.Rect(x0, y0 + (bh + gap),     bw, bh),
@@ -2390,7 +2420,8 @@ def _start_menu(screen, w, h):
         }
         _btn_bottom_y = eff_h - _corner_sz - gap
     else:
-        bw, bh = 210, 56
+        bh = _fz(56, _s)
+        bw = _fz(210, _s)
         total_w = bw * 3 + gap * 2
         x0 = w // 2 - total_w // 2
         frame_y = eff_h // 5
@@ -2479,13 +2510,14 @@ def _start_menu(screen, w, h):
         screen.blit(scanlines, (0, 0))
 
         # Stacked two-colour pixel art title: MEGA (gold) + CHESS (teal)
-        mega_surf  = _pixel_text('MEGA',  72, Colours.GOLD, bold=True)
-        chess_surf = _pixel_text('CHESS', 72, Colours.HIGH, bold=True)
+        _title_sz = _fz(72, min(_s, 1.5))   # cap title scale so it doesn't crowd buttons
+        mega_surf  = _pixel_text('MEGA',  _title_sz, Colours.GOLD, bold=True)
+        chess_surf = _pixel_text('CHESS', _title_sz, Colours.HIGH, bold=True)
         title_w  = max(mega_surf.get_width(), chess_surf.get_width())
         title_h  = mega_surf.get_height() + chess_surf.get_height() + 4
         frame_x  = w // 2 - title_w // 2 - 24
         # frame_y pre-computed in layout block above
-        pad = 16
+        pad = _fz(16, _s)
         # Outer teal border + dark inner fill
         pygame.draw.rect(screen, Colours.HIGH,
                          (frame_x - 4, frame_y - 4, title_w + 56, title_h + pad * 2 + 8), 3)
@@ -2505,14 +2537,14 @@ def _start_menu(screen, w, h):
         screen.blit(mega_surf,  mega_surf.get_rect(centerx=cx,  top=frame_y + pad))
         screen.blit(chess_surf, chess_surf.get_rect(centerx=cx, top=frame_y + pad + mega_surf.get_height() + 4))
 
-        # Blinking cursor prompt — pixel art text
+        # Blinking cursor prompt + keyboard shortcuts
         blink = (pygame.time.get_ticks() // 500) % 2
         hint_str = 'PRESS ENTER TO PLAY' + (' _' if blink else '  ')
-        hint_s = _pixel_text(hint_str, 16, (140, 130, 170), bold=True)
-        screen.blit(hint_s, hint_s.get_rect(centerx=w // 2, top=frame_y + title_h + pad * 2 + 24))
+        hint_s = _pixel_text(hint_str, _fz(16, _s), (140, 130, 170), bold=True)
+        screen.blit(hint_s, hint_s.get_rect(centerx=w // 2, top=frame_y + title_h + pad * 2 + gap))
 
-        sub = _pixel_text('E = edit pieces   *   L = edit layout', 16, (100, 90, 130), bold=True)
-        screen.blit(sub, sub.get_rect(centerx=w // 2, top=frame_y + title_h + pad * 2 + 52))
+        sub = _pixel_text('E = edit pieces   *   L = edit layout', _fz(14, _s), (100, 90, 130), bold=True)
+        screen.blit(sub, sub.get_rect(centerx=w // 2, top=frame_y + title_h + pad * 2 + gap + hint_s.get_height() + 4))
 
         BEVEL = 2
         _icon_map = {
@@ -2539,8 +2571,8 @@ def _start_menu(screen, w, h):
             pygame.draw.line(screen, blo, rect.bottomleft, rect.bottomright, BEVEL)
             pygame.draw.line(screen, blo, rect.topright,   rect.bottomright, BEVEL)
             short = _label_map.get(label, label)
-            shadow_s = _pixel_text(short, 24, (0, 0, 0), bold=True)
-            txt_s    = _pixel_text(short, 24, tc,         bold=True)
+            shadow_s = _pixel_text(short, _fz(24, _s), (0, 0, 0), bold=True)
+            txt_s    = _pixel_text(short, _fz(24, _s), tc,         bold=True)
             total_w = ICN + 6 + txt_s.get_width()
             ix = rect.centerx - total_w // 2 + ICN // 2
             tx = rect.centerx - total_w // 2 + ICN + 6

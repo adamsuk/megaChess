@@ -22,6 +22,11 @@ except NameError:
     xrange = range
 
 
+def _on_android():
+    """Return True when running on Android (Pydroid3, Buildozer, or any python-for-android env)."""
+    return 'ANDROID_ARGUMENT' in os.environ or os.path.exists('/system/build.prop')
+
+
 def _pixel_text(text, size, color, bold=False):
     """Return a pygame Surface with genuine pixel-art text.
     Renders at half size with no antialiasing, then scales up 2x with
@@ -232,7 +237,7 @@ class Graphics:
         pygame.init()
         info = pygame.display.Info()
         self.button_bar_height = 48
-        _android = 'ANDROID_ARGUMENT' in os.environ
+        _android = _on_android()
         _flags = pygame.FULLSCREEN if _android else 0
         self.window_size = max(0, min(info.current_w, info.current_h - self.button_bar_height))
         self.screen = pygame.display.set_mode(

@@ -57,6 +57,92 @@ def _pixel_text(text, size, color, bold=False):
     return pygame.transform.scale(surf, (w * 2, h * 2))
 
 
+def _draw_icon(surf, name, cx, cy, sz, col):
+    """Draw a pixel-art icon centred at (cx, cy) within a bounding box of sz×sz pixels.
+
+    Supported names: play, back, save, load, hints, reset, clone, pieces, layout.
+    All shapes are drawn with pygame.draw primitives for a chunky retro look.
+    """
+    h = sz // 2          # half-size shorthand
+    q = max(sz // 4, 2)  # quarter-size
+
+    if name == 'play':
+        pts = [(cx - h + 2, cy - h + 3),
+               (cx - h + 2, cy + h - 3),
+               (cx + h - 2, cy)]
+        pygame.draw.polygon(surf, col, pts)
+
+    elif name == 'back':
+        pts = [(cx + h - 2, cy - h + 3),
+               (cx + h - 2, cy + h - 3),
+               (cx - h + 2, cy)]
+        pygame.draw.polygon(surf, col, pts)
+
+    elif name == 'save':
+        # Outer body
+        pygame.draw.rect(surf, col, (cx - h + 1, cy - h + 1, sz - 2, sz - 2))
+        # Slide-lock notch (top-right corner cut)
+        notch = q
+        pygame.draw.polygon(surf, (0, 0, 0),
+                            [(cx + h - notch - 1, cy - h + 1),
+                             (cx + h - 1,         cy - h + 1),
+                             (cx + h - 1,         cy - h + notch + 1)])
+        # Label strip at bottom
+        pygame.draw.rect(surf, (0, 0, 0),
+                         (cx - h + 3, cy + q - 1, sz - 6, h - q))
+
+    elif name == 'load':
+        # Folder tab on top-left
+        pygame.draw.rect(surf, col,
+                         (cx - h + 1, cy - h + 1 + q, sz - 2, sz - 2 - q))
+        pygame.draw.rect(surf, col,
+                         (cx - h + 1, cy - h + 1, q * 2 + 2, q + 1))
+
+    elif name == 'hints':
+        # Eye: outer ellipse
+        pygame.draw.ellipse(surf, col,
+                            (cx - h + 1, cy - q + 1, sz - 2, q * 2 - 2))
+        # Pupil
+        r = max(q - 2, 2)
+        pygame.draw.circle(surf, (0, 0, 0), (cx, cy), r)
+        pygame.draw.circle(surf, col,       (cx, cy), max(r - 2, 1))
+
+    elif name == 'reset':
+        # Two arcs forming a circular arrow
+        import math
+        r = h - 2
+        pygame.draw.arc(surf, col,
+                        (cx - r, cy - r, r * 2, r * 2),
+                        math.radians(30), math.radians(330), max(sz // 6, 2))
+        # Arrowhead at 30°
+        tip_x = int(cx + r * math.cos(math.radians(30)))
+        tip_y = int(cy - r * math.sin(math.radians(30)))
+        pts = [(tip_x,     tip_y),
+               (tip_x - q, tip_y - q),
+               (tip_x + q // 2, tip_y + q // 2)]
+        pygame.draw.polygon(surf, col, pts)
+
+    elif name == 'clone':
+        # Two overlapping open rects (offset by q)
+        pygame.draw.rect(surf, col,
+                         (cx - h + 1, cy - h + 1, sz - 2 - q, sz - 2 - q), 2)
+        pygame.draw.rect(surf, col,
+                         (cx - h + 1 + q, cy - h + 1 + q, sz - 2 - q, sz - 2 - q), 2)
+
+    elif name == 'pieces':
+        # Pawn: circle head + stem + wide base
+        pygame.draw.circle(surf, col, (cx, cy - q), q)
+        pygame.draw.rect(surf, col, (cx - 1, cy, 3, q))
+        pygame.draw.rect(surf, col, (cx - q - 1, cy + q, q * 2 + 3, q))
+
+    elif name == 'layout':
+        # 2×2 grid of filled squares
+        qs = q - 1
+        for dy in (cy - h + 2, cy + 2):
+            for dx in (cx - h + 2, cx + 2):
+                pygame.draw.rect(surf, col, (dx, dy, qs, qs))
+
+
 class Game:
 
     def __init__(self):
@@ -359,8 +445,8 @@ class Graphics:
         return bw, bh, pad
 
     def _bar_y(self):
-        """Y coordinate where the button bar begins — directly below the board."""
-        return self.window_size
+        """Y coordinate where the button bar begins — at the bottom of the full screen."""
+        return self.screen_h - self.button_bar_height
 
     @property
     def save_btn_rect(self):
@@ -380,20 +466,21 @@ class Graphics:
     def draw_button_bar(self, mouse_px, save_exists, show_hints=True):
         """Draw the Save / Load / Hints button strip below the board — pixel art style."""
         bar_y = self._bar_y()
-        bar_rect = pygame.Rect(0, bar_y, self.window_size, self.button_bar_height)
+        bar_rect = pygame.Rect(0, bar_y, self.screen_w, self.button_bar_height)
         pygame.draw.rect(self.screen, (8, 8, 18), bar_rect)
         # Pixel art divider: bright top line + dark second line
         pygame.draw.line(self.screen, (60, 50, 100),
-                         (0, bar_y), (self.window_size, bar_y), 2)
+                         (0, bar_y), (self.screen_w, bar_y), 2)
         pygame.draw.line(self.screen, (20, 15, 40),
-                         (0, bar_y + 2), (self.window_size, bar_y + 2), 1)
+                         (0, bar_y + 2), (self.screen_w, bar_y + 2), 1)
 
         BEVEL = 2
+        ICN = max(self.button_bar_height - 20, 12)   # icon size
 
-        for label, rect, enabled, toggled in [
-            ('Save  [S]',  self.save_btn_rect,  True,        True),
-            ('Load  [L]',  self.load_btn_rect,  save_exists, True),
-            ('Hints  [H]', self.hints_btn_rect, True,        show_hints),
+        for icon_name, label, rect, enabled, toggled in [
+            ('save',  'Save',  self.save_btn_rect,  True,        True),
+            ('load',  'Load',  self.load_btn_rect,  save_exists, True),
+            ('hints', 'Hints', self.hints_btn_rect, True,        show_hints),
         ]:
             hovered = rect.collidepoint(*mouse_px) and enabled
             if not enabled:
@@ -419,11 +506,15 @@ class Graphics:
             pygame.draw.line(self.screen, bhi, rect.topleft,    rect.bottomleft,  BEVEL)
             pygame.draw.line(self.screen, blo, rect.bottomleft, rect.bottomright, BEVEL)
             pygame.draw.line(self.screen, blo, rect.topright,   rect.bottomright, BEVEL)
-            # Text with drop shadow — pixel art (blocky, no antialiasing)
-            shadow_s = _pixel_text(label, 18, (0, 0, 0), bold=True)
-            text_s   = _pixel_text(label, 18, tc,        bold=True)
-            self.screen.blit(shadow_s, shadow_s.get_rect(center=(rect.centerx + 1, rect.centery + 1)))
-            self.screen.blit(text_s,   text_s.get_rect(center=rect.center))
+            # Icon + label centred in button
+            text_s   = _pixel_text(label, 16, tc, bold=True)
+            shadow_s = _pixel_text(label, 16, (0, 0, 0), bold=True)
+            total_w = ICN + 4 + text_s.get_width()
+            ix = rect.centerx - total_w // 2 + ICN // 2
+            tx = rect.centerx - total_w // 2 + ICN + 4
+            _draw_icon(self.screen, icon_name, ix, rect.centery, ICN, tc)
+            self.screen.blit(shadow_s, shadow_s.get_rect(midleft=(tx + 1, rect.centery + 1)))
+            self.screen.blit(text_s,   text_s.get_rect(midleft=(tx, rect.centery)))
 
     def draw_board_frame(self):
         """Draw dark surround + pixel-art teal border + coordinate labels (a-h / 1-n).
@@ -816,6 +907,7 @@ class PieceEditor:
     ON_COLOR    = ( 60, 200,  90)
     OFF_COLOR   = ( 50,  45,  70)
     PADDING     = 16
+    HEADER_H    = 56   # reserved height for title + keystroke hint row
 
     # One-line explanations shown as a tooltip when hovering a flag toggle
     FLAG_DESCRIPTIONS = {
@@ -1008,12 +1100,12 @@ class PieceEditor:
 
     def _piece_rects(self, names, left_w):
         if self._portrait:
-            # Horizontal wrapping tabs across full width
+            # Horizontal wrapping tabs across full width — start below header
             pad = self.PADDING
             tab_h = 36
             tab_w = max(80, min(160, (self.w - pad) // max(1, len(names))))
             rects = []
-            x, y = pad, pad
+            x, y = pad, self.HEADER_H + 4
             for _ in names:
                 if x + tab_w + pad > self.w:
                     x = pad
@@ -1022,8 +1114,8 @@ class PieceEditor:
                 x += tab_w + 4
             return rects
         else:
-            # Original vertical list
-            top = 60
+            # Vertical list — start below header
+            top = self.HEADER_H + 4
             rects = []
             for i in range(len(names)):
                 rects.append(pygame.Rect(self.PADDING, top + i * 44, left_w - self.PADDING * 2, 38))
@@ -1142,8 +1234,8 @@ class PieceEditor:
     # ------------------------------------------------------------------
 
     def _draw_pixel_btn(self, surf, rect, base_color, hovered, text, font, text_color,
-                        bevel=2):
-        """Draw a pixel-art bevelled button (square corners)."""
+                        bevel=2, icon=None):
+        """Draw a pixel-art bevelled button (square corners), with optional icon."""
         bg = tuple(min(c + 30, 255) for c in base_color) if hovered else base_color
         hi = tuple(min(c + 55, 255) for c in base_color)
         lo = tuple(max(c - 25,   0) for c in base_color)
@@ -1152,36 +1244,50 @@ class PieceEditor:
         pygame.draw.line(surf, hi, rect.topleft,    rect.bottomleft,  bevel)
         pygame.draw.line(surf, lo, rect.bottomleft, rect.bottomright, bevel)
         pygame.draw.line(surf, lo, rect.topright,   rect.bottomright, bevel)
-        if text:
-            shd = font.render(text, True, (0, 0, 0))
-            lbl = font.render(text, True, text_color)
-            surf.blit(shd, shd.get_rect(center=(rect.centerx + 1, rect.centery + 1)))
-            surf.blit(lbl, lbl.get_rect(center=rect.center))
+        if icon or text:
+            icn_sz = rect.height - 10 if icon else 0
+            lbl_surf = font.render(text, True, text_color) if text else None
+            shd_surf = font.render(text, True, (0, 0, 0))  if text else None
+            lbl_w = lbl_surf.get_width() if lbl_surf else 0
+            gap = 4 if (icon and text) else 0
+            total_w = icn_sz + gap + lbl_w
+            ix = rect.centerx - total_w // 2 + icn_sz // 2
+            tx = rect.centerx - total_w // 2 + icn_sz + gap
+            if icon:
+                _draw_icon(surf, icon, ix, rect.centery, icn_sz, text_color)
+            if lbl_surf:
+                surf.blit(shd_surf, shd_surf.get_rect(midleft=(tx + 1, rect.centery + 1)))
+                surf.blit(lbl_surf, lbl_surf.get_rect(midleft=(tx,     rect.centery)))
 
     def _draw(self, defs, selected, piece_names, left_w, right_x, right_w,
               btn_y, btn_h, mouse, scroll_y, status_msg):
         self.screen.fill(self.BG)
 
-        # Title with drop-shadow
+        # Header bar with title + keystroke hint, separated from content by a line
+        hdr = self.HEADER_H
+        pygame.draw.rect(self.screen, (16, 12, 32), (0, 0, self.w, hdr))
+        pygame.draw.line(self.screen, Colours.HIGH, (0, hdr - 1), (self.w, hdr - 1), 1)
+        # Title centred vertically in header
         shd = self.title_font.render('Piece Editor', True, (0, 0, 0))
         title = self.title_font.render('Piece Editor', True, self.TITLE_COLOR)
-        self.screen.blit(shd,   (self.PADDING + 2, self.PADDING - 2))
-        self.screen.blit(title, (self.PADDING,      self.PADDING - 4))
-
-        hint = self.tiny_font.render('Esc or ← Back = return to main menu', True, self.DIM_TEXT)
-        self.screen.blit(hint, (self.w - hint.get_width() - self.PADDING, self.PADDING))
+        ty = hdr // 2 - title.get_height() // 2
+        self.screen.blit(shd,   (self.PADDING + 1, ty + 1))
+        self.screen.blit(title, (self.PADDING,      ty))
+        hint = self.tiny_font.render('Esc / Back = main menu', True, self.DIM_TEXT)
+        self.screen.blit(hint, (self.w - hint.get_width() - self.PADDING,
+                                hdr // 2 - hint.get_height() // 2))
 
         # Piece selector (left panel in landscape, top tabs in portrait)
         tab_rects = self._piece_rects(piece_names, left_w)
         if self._portrait:
-            tab_bottom = (tab_rects[-1].bottom + self.PADDING) if tab_rects else 50
+            tab_bottom = (tab_rects[-1].bottom + self.PADDING) if tab_rects else hdr + 4
         else:
             # Left panel — pixel art frame (square corners, teal outer + dark inner)
-            left_panel = pygame.Rect(0, 50, left_w, btn_y - 50)
+            left_panel = pygame.Rect(0, hdr, left_w, btn_y - hdr)
             pygame.draw.rect(self.screen, self.PANEL_BG, left_panel, border_radius=0)
             pygame.draw.rect(self.screen, Colours.HIGH,  left_panel, 2)
             pygame.draw.rect(self.screen, (30, 25, 55),  left_panel.inflate(-4, -4), 1)
-            tab_bottom = 55
+            tab_bottom = hdr + 4
 
         for name, rect in zip(piece_names, tab_rects):
             is_sel = (name == selected)
@@ -1197,8 +1303,8 @@ class PieceEditor:
             right_panel = pygame.Rect(self.PADDING // 2, tab_bottom,
                                       self.w - self.PADDING, btn_y - tab_bottom)
         else:
-            right_panel = pygame.Rect(right_x - self.PADDING, 50,
-                                      right_w + self.PADDING, btn_y - 50)
+            right_panel = pygame.Rect(right_x - self.PADDING, hdr,
+                                      right_w + self.PADDING, btn_y - hdr)
         pygame.draw.rect(self.screen, self.PANEL_BG, right_panel, border_radius=0)
         pygame.draw.rect(self.screen, Colours.HIGH,  right_panel, 2)
         pygame.draw.rect(self.screen, (30, 25, 55),  right_panel.inflate(-4, -4), 1)
@@ -1206,7 +1312,7 @@ class PieceEditor:
         if self._portrait:
             clip = pygame.Rect(self.PADDING, tab_bottom, right_w, btn_y - tab_bottom)
         else:
-            clip = pygame.Rect(right_x - self.PADDING, 55, right_w + self.PADDING, btn_y - 60)
+            clip = pygame.Rect(right_x - self.PADDING, hdr + 4, right_w + self.PADDING, btn_y - hdr - 8)
         self.screen.set_clip(clip)
 
         hovered_flag  = None
@@ -1220,9 +1326,9 @@ class PieceEditor:
                 self.screen.blit(hdr, (right_x, tab_bottom + self.PADDING // 2))
                 y = tab_bottom + 32 - scroll_y
             else:
-                hdr = self.label_font.render(f'{selected}  —  move rules', True, self.TEXT)
-                self.screen.blit(hdr, (right_x, 60 - scroll_y))
-                y = 92 - scroll_y
+                hdr_lbl = self.label_font.render(f'{selected}  —  move rules', True, self.TEXT)
+                self.screen.blit(hdr_lbl, (right_x, self.HEADER_H + 4 - scroll_y))
+                y = self.HEADER_H + 36 - scroll_y
 
             for i, rule in enumerate(piece_def.get('move_rules', [])):
                 # ── Rule label + remove button ────────────────────────────
@@ -1300,7 +1406,7 @@ class PieceEditor:
             pygame.draw.rect(self.screen, Colours.HIGH, tip_bg, width=1)
             self.screen.blit(tip_surf, (tx + 6, ty + 4))
 
-        # Buttons — pixel art bevel
+        # Buttons — pixel art bevel with icons
         btn_colors = {
             '← Back': (70, 55, 70),
             'Clone':  self.BTN_BG,
@@ -1308,10 +1414,25 @@ class PieceEditor:
             'Save':   self.BTN_SAVE,
             'Play':   self.BTN_PLAY,
         }
+        btn_icons = {
+            '← Back': 'back',
+            'Clone':  'clone',
+            'Reset':  'reset',
+            'Save':   'save',
+            'Play':   'play',
+        }
+        btn_short = {
+            '← Back': 'Back',
+            'Clone':  'Clone',
+            'Reset':  'Reset',
+            'Save':   'Save',
+            'Play':   'Play',
+        }
         for label, rect in self._button_rects(btn_y, btn_h).items():
             hov = rect.collidepoint(*mouse)
             self._draw_pixel_btn(self.screen, rect, btn_colors[label], hov,
-                                 label, self.label_font, self.TEXT)
+                                 btn_short.get(label, label), self.label_font,
+                                 self.TEXT, icon=btn_icons.get(label))
 
         # Status message
         if status_msg:
@@ -1348,6 +1469,7 @@ class BoardLayoutEditor:
     BROWN       = Colours.BROWN
     HIGH        = Colours.HIGH
     PADDING     = 14
+    HEADER_H    = 48   # reserved height for title + keystroke hint row
 
     # Piece types in palette order
     PALETTE_PIECES = ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn']
@@ -1488,8 +1610,8 @@ class BoardLayoutEditor:
     def _board_origin(self):
         """Top-left pixel corner of the board."""
         if self._portrait:
-            return (self.PADDING, 44)
-        return (0, 44)
+            return (self.PADDING, self.HEADER_H)
+        return (0, self.HEADER_H)
 
     def _panel_x(self, board_size=8):
         if self._portrait:
@@ -1505,7 +1627,7 @@ class BoardLayoutEditor:
             sq = self._board_sq_size(board_size)
             _, oy = self._board_origin()
             return oy + sq * board_size + self.PADDING
-        return 44  # same as _board_origin y
+        return self.HEADER_H  # same as _board_origin y
 
     def _board_sq_rect(self, x, y, board_size=8):
         sq = self._board_sq_size(board_size)
@@ -1839,7 +1961,7 @@ class BoardLayoutEditor:
     # ------------------------------------------------------------------
 
     def _draw_pixel_btn(self, surf, rect, base_color, hovered, text, font, text_color,
-                        bevel=2):
+                        bevel=2, icon=None):
         """Draw a pixel-art bevelled button (square corners, bright top/left, dark bottom/right)."""
         bg = tuple(min(c + 30, 255) for c in base_color) if hovered else base_color
         hi = tuple(min(c + 55, 255) for c in base_color)
@@ -1849,11 +1971,20 @@ class BoardLayoutEditor:
         pygame.draw.line(surf, hi, rect.topleft,    rect.bottomleft,  bevel)
         pygame.draw.line(surf, lo, rect.bottomleft, rect.bottomright, bevel)
         pygame.draw.line(surf, lo, rect.topright,   rect.bottomright, bevel)
-        if text:
-            shd = font.render(text, True, (0, 0, 0))
-            lbl = font.render(text, True, text_color)
-            surf.blit(shd, shd.get_rect(center=(rect.centerx + 1, rect.centery + 1)))
-            surf.blit(lbl, lbl.get_rect(center=rect.center))
+        if icon or text:
+            icn_sz = rect.height - 10 if icon else 0
+            lbl_surf = font.render(text, True, text_color) if text else None
+            shd_surf = font.render(text, True, (0, 0, 0))  if text else None
+            lbl_w = lbl_surf.get_width() if lbl_surf else 0
+            gap = 4 if (icon and text) else 0
+            total_w = icn_sz + gap + lbl_w
+            ix = rect.centerx - total_w // 2 + icn_sz // 2
+            tx = rect.centerx - total_w // 2 + icn_sz + gap
+            if icon:
+                _draw_icon(surf, icon, ix, rect.centery, icn_sz, text_color)
+            if lbl_surf:
+                surf.blit(shd_surf, shd_surf.get_rect(midleft=(tx + 1, rect.centery + 1)))
+                surf.blit(lbl_surf, lbl_surf.get_rect(midleft=(tx,     rect.centery)))
 
     def _theme_rects(self, panel_x, panel_w, start_y):
         """Return dict of (kind, name) → pygame.Rect for theme selector buttons."""
@@ -1877,17 +2008,19 @@ class BoardLayoutEditor:
         board_size = layout.get('board_size', 8)
         self.screen.fill(self.BG)
 
-        # Title with drop-shadow
+        # Header bar with title + keystroke hint, separated from content by a line
+        hdr = self.HEADER_H
+        pygame.draw.rect(self.screen, (16, 12, 32), (0, 0, self.w, hdr))
+        pygame.draw.line(self.screen, self.HIGH, (0, hdr - 1), (self.w, hdr - 1), 1)
         shd = self.title_font.render('Board Layout Editor', True, (0, 0, 0))
         title = self.title_font.render('Board Layout Editor', True, self.TITLE_COLOR)
-        self.screen.blit(shd,   (self.PADDING + 2, 10))
-        self.screen.blit(title, (self.PADDING,      8))
-        hint = self.tiny_font.render('Left-click: place  •  Right-click: clear  •  Esc: back',
+        ty = hdr // 2 - title.get_height() // 2
+        self.screen.blit(shd,   (self.PADDING + 1, ty + 1))
+        self.screen.blit(title, (self.PADDING,      ty))
+        hint = self.tiny_font.render('L-click: place  •  R-click: clear  •  Esc: back',
                                      True, self.DIM_TEXT)
-        if self._portrait:
-            self.screen.blit(hint, hint.get_rect(right=self.w - self.PADDING, top=8))
-        else:
-            self.screen.blit(hint, (self._panel_x(board_size), 8))
+        self.screen.blit(hint, hint.get_rect(right=self.w - self.PADDING,
+                                             centery=hdr // 2))
 
         sq = self._board_sq_size(board_size)
         ox, oy = self._board_origin()
@@ -2111,17 +2244,20 @@ class BoardLayoutEditor:
             self._draw_pixel_btn(self.screen, rect, self.BTN_BG, hov,
                                  name, self.tiny_font, self.TEXT)
 
-        # Bottom action buttons (pixel art bevel)
+        # Bottom action buttons (pixel art bevel with icons)
         btn_colors = {
             '← Back': self.BTN_BG,
             'Reset':   self.BTN_RST,
             'Save':    self.BTN_SAVE,
             'Play':    self.BTN_PLAY,
         }
+        btn_icons = {'← Back': 'back', 'Reset': 'reset', 'Save': 'save', 'Play': 'play'}
+        btn_short = {'← Back': 'Back', 'Reset': 'Reset', 'Save': 'Save', 'Play': 'Play'}
         for label, rect in self._button_rects(btn_y, btn_h, board_size).items():
             hov = rect.collidepoint(*mouse)
             self._draw_pixel_btn(self.screen, rect, btn_colors[label], hov,
-                                 label, self.label_font, self.TEXT)
+                                 btn_short.get(label, label), self.label_font,
+                                 self.TEXT, icon=btn_icons.get(label))
 
         # Status message
         if status_msg:
@@ -2235,34 +2371,35 @@ def _start_menu(screen, w, h):
     clock = pygame.time.Clock()
     gap = 16
     _portrait = h > w * 1.1
+    # All content (corners, title, buttons) is laid out within eff_h = min(w, h).
+    # The dark background fills the full h, keeping the screen full-height on Android
+    # while the interactive elements stay in the "roughly half-height" upper square.
+    eff_h = min(w, h)
+    _corner_sz = 14 * 4   # _cell * 4, matches corner decoration built below
     if _portrait:
         bw = w - gap * 2
         bh = 56
         x0 = gap
         btn_area_h = bh * 3 + gap * 2
-        # Place title proportionally based on the excess height, not anchored to h
-        frame_y = max(gap * 4, (h - w) // 4)
-        # Estimated title block height: two ~80px font lines + padding + hint texts
-        _title_block_h = w * 30 // 100
-        y0 = frame_y + _title_block_h
+        frame_y = eff_h // 5
+        y0 = eff_h * 2 // 3
         btns = {
             'Play':        pygame.Rect(x0, y0,                  bw, bh),
             'Edit Pieces': pygame.Rect(x0, y0 + (bh + gap),     bw, bh),
             'Edit Layout': pygame.Rect(x0, y0 + (bh + gap) * 2, bw, bh),
         }
-        # Bottom corner squares sit just below the button group, always visible
-        _btn_bottom_y = y0 + btn_area_h + gap
+        _btn_bottom_y = eff_h - _corner_sz - gap
     else:
         bw, bh = 210, 56
         total_w = bw * 3 + gap * 2
         x0 = w // 2 - total_w // 2
-        frame_y = h // 5
+        frame_y = eff_h // 5
         btns = {
-            'Play':         pygame.Rect(x0,                   h * 2 // 3, bw, bh),
-            'Edit Pieces':  pygame.Rect(x0 + (bw + gap),      h * 2 // 3, bw, bh),
-            'Edit Layout':  pygame.Rect(x0 + (bw + gap) * 2,  h * 2 // 3, bw, bh),
+            'Play':         pygame.Rect(x0,                   eff_h * 2 // 3, bw, bh),
+            'Edit Pieces':  pygame.Rect(x0 + (bw + gap),      eff_h * 2 // 3, bw, bh),
+            'Edit Layout':  pygame.Rect(x0 + (bw + gap) * 2,  eff_h * 2 // 3, bw, bh),
         }
-        _btn_bottom_y = h - 56 - gap  # landscape: near screen bottom as before
+        _btn_bottom_y = eff_h - _corner_sz - gap
     btn_colors = {
         'Play':        (30,  75, 150),
         'Edit Pieces': (30, 100,  55),
@@ -2378,6 +2515,18 @@ def _start_menu(screen, w, h):
         screen.blit(sub, sub.get_rect(centerx=w // 2, top=frame_y + title_h + pad * 2 + 52))
 
         BEVEL = 2
+        _icon_map = {
+            'Play':        'play',
+            'Edit Pieces': 'pieces',
+            'Edit Layout': 'layout',
+        }
+        _label_map = {
+            'Play':        'Play',
+            'Edit Pieces': 'Pieces',
+            'Edit Layout': 'Layout',
+        }
+        ICN = max(btns['Play'].height - 18, 14)
+        tc = (220, 225, 235)
         for label, rect in btns.items():
             hov = rect.collidepoint(mx, my)
             base = btn_colors[label]
@@ -2389,10 +2538,15 @@ def _start_menu(screen, w, h):
             pygame.draw.line(screen, bhi, rect.topleft,    rect.bottomleft,  BEVEL)
             pygame.draw.line(screen, blo, rect.bottomleft, rect.bottomright, BEVEL)
             pygame.draw.line(screen, blo, rect.topright,   rect.bottomright, BEVEL)
-            shadow_s = _pixel_text(label, 24, (0, 0, 0),       bold=True)
-            txt_s    = _pixel_text(label, 24, (220, 225, 235),  bold=True)
-            screen.blit(shadow_s, shadow_s.get_rect(center=(rect.centerx + 1, rect.centery + 1)))
-            screen.blit(txt_s,    txt_s.get_rect(center=rect.center))
+            short = _label_map.get(label, label)
+            shadow_s = _pixel_text(short, 24, (0, 0, 0), bold=True)
+            txt_s    = _pixel_text(short, 24, tc,         bold=True)
+            total_w = ICN + 6 + txt_s.get_width()
+            ix = rect.centerx - total_w // 2 + ICN // 2
+            tx = rect.centerx - total_w // 2 + ICN + 6
+            _draw_icon(screen, _icon_map.get(label, 'play'), ix, rect.centery, ICN, tc)
+            screen.blit(shadow_s, shadow_s.get_rect(midleft=(tx + 1, rect.centery + 1)))
+            screen.blit(txt_s,    txt_s.get_rect(midleft=(tx, rect.centery)))
 
         pygame.display.update()
         clock.tick(60)

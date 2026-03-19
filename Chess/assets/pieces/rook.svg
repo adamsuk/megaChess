@@ -2,11 +2,11 @@
   <!-- Pixel art rook: 10x10 block grid, 8 units per block, rects only -->
   <!-- Battlements: 3 merlons (gaps at col 2 and col 7); tower body; collar; base -->
 
-  <!-- Row 0: ##  ##  --  ##  ##  ##  ##  --  ##  ## -->
+  <!-- Row 0: ##  ##      ##  ##  ##  ##      ##  ## -->
   <rect x="0"  y="0"  width="16" height="8" fill="{stroke}"/>
   <rect x="24" y="0"  width="32" height="8" fill="{stroke}"/>
   <rect x="64" y="0"  width="16" height="8" fill="{stroke}"/>
-  <!-- Row 1: ##  HH  --  ##  HH  HH  oo  --  oo  ## -->
+  <!-- Row 1: ##  HH      ##  HH  HH  oo      oo  ## -->
   <rect x="0"  y="8"  width="8"  height="8" fill="{stroke}"/>
   <rect x="8"  y="8"  width="8"  height="8" fill="{fill_hi}"/>
   <rect x="24" y="8"  width="8"  height="8" fill="{stroke}"/>
@@ -14,36 +14,36 @@
   <rect x="48" y="8"  width="8"  height="8" fill="{fill_lo}"/>
   <rect x="64" y="8"  width="8"  height="8" fill="{fill_lo}"/>
   <rect x="72" y="8"  width="8"  height="8" fill="{stroke}"/>
-  <!-- Row 2: ##  oo  ##  ##  HH  HH  oo  ##  --  -- -->
+  <!-- Row 2: ##  oo  ##  ##  HH  HH  oo  ##         -->
   <rect x="0"  y="16" width="8"  height="8" fill="{stroke}"/>
   <rect x="8"  y="16" width="8"  height="8" fill="{fill_lo}"/>
   <rect x="16" y="16" width="16" height="8" fill="{stroke}"/>
   <rect x="32" y="16" width="16" height="8" fill="{fill_hi}"/>
   <rect x="48" y="16" width="8"  height="8" fill="{fill_lo}"/>
   <rect x="56" y="16" width="8"  height="8" fill="{stroke}"/>
-  <!-- Row 3: --  ##  HH  HH  HH  HH  oo  oo  ##  -- -->
+  <!-- Row 3:     ##  HH  HH  HH  HH  oo  oo  ##     -->
   <rect x="8"  y="24" width="8"  height="8" fill="{stroke}"/>
   <rect x="16" y="24" width="32" height="8" fill="{fill_hi}"/>
   <rect x="48" y="24" width="16" height="8" fill="{fill_lo}"/>
   <rect x="64" y="24" width="8"  height="8" fill="{stroke}"/>
-  <!-- Row 4: --  ##  HH  HH  HH  HH  oo  oo  ##  -- -->
+  <!-- Row 4:     ##  HH  HH  HH  HH  oo  oo  ##     -->
   <rect x="8"  y="32" width="8"  height="8" fill="{stroke}"/>
   <rect x="16" y="32" width="32" height="8" fill="{fill_hi}"/>
   <rect x="48" y="32" width="16" height="8" fill="{fill_lo}"/>
   <rect x="64" y="32" width="8"  height="8" fill="{stroke}"/>
-  <!-- Row 5: --  ##  HH  HH  ..  ..  oo  oo  ##  -- -->
+  <!-- Row 5:     ##  HH  HH  ..  ..  oo  oo  ##     -->
   <rect x="8"  y="40" width="8"  height="8" fill="{stroke}"/>
   <rect x="16" y="40" width="16" height="8" fill="{fill_hi}"/>
   <rect x="32" y="40" width="16" height="8" fill="{fill}"/>
   <rect x="48" y="40" width="16" height="8" fill="{fill_lo}"/>
   <rect x="64" y="40" width="8"  height="8" fill="{stroke}"/>
-  <!-- Row 6: --  ##  HH  ..  ..  ..  oo  oo  ##  -- -->
+  <!-- Row 6:     ##  HH  ..  ..  ..  oo  oo  ##     -->
   <rect x="8"  y="48" width="8"  height="8" fill="{stroke}"/>
   <rect x="16" y="48" width="8"  height="8" fill="{fill_hi}"/>
   <rect x="24" y="48" width="24" height="8" fill="{fill}"/>
   <rect x="48" y="48" width="16" height="8" fill="{fill_lo}"/>
   <rect x="64" y="48" width="8"  height="8" fill="{stroke}"/>
-  <!-- Row 7: --  ##  ##  ##  ##  ##  ##  ##  ##  -- -->
+  <!-- Row 7:     ##  ##  ##  ##  ##  ##  ##  ##     -->
   <rect x="8"  y="56" width="64" height="8" fill="{stroke}"/>
   <!-- Row 8: ##  HH  HH  ..  ..  ..  oo  oo  oo  ## -->
   <rect x="0"  y="64" width="8"  height="8" fill="{stroke}"/>

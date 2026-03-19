@@ -2,44 +2,44 @@
   <!-- Pixel art knight: 10x10 block grid, 8 units per block, rects only -->
   <!-- Horse head profile: ear tip col 5, eye accent col 7, neck to collar+base -->
 
-  <!-- Row 0: --  --  --  --  --  ##  --  --  --  -- -->
+  <!-- Row 0:                     ##                 -->
   <rect x="40" y="0"  width="8"  height="8" fill="{stroke}"/>
-  <!-- Row 1: --  --  --  --  ##  HH  ##  --  --  -- -->
+  <!-- Row 1:                 ##  HH  ##             -->
   <rect x="32" y="8"  width="8"  height="8" fill="{stroke}"/>
   <rect x="40" y="8"  width="8"  height="8" fill="{fill_hi}"/>
   <rect x="48" y="8"  width="8"  height="8" fill="{stroke}"/>
-  <!-- Row 2: --  --  --  ##  HH  ..  oo  ##  --  -- -->
+  <!-- Row 2:             ##  HH  ..  oo  ##         -->
   <rect x="24" y="16" width="8"  height="8" fill="{stroke}"/>
   <rect x="32" y="16" width="8"  height="8" fill="{fill_hi}"/>
   <rect x="40" y="16" width="8"  height="8" fill="{fill}"/>
   <rect x="48" y="16" width="8"  height="8" fill="{fill_lo}"/>
   <rect x="56" y="16" width="8"  height="8" fill="{stroke}"/>
-  <!-- Row 3: --  --  ##  HH  HH  ..  oo  **  ##  -- -->
+  <!-- Row 3:         ##  HH  HH  ..  oo  **  ##     -->
   <rect x="16" y="24" width="8"  height="8" fill="{stroke}"/>
   <rect x="24" y="24" width="16" height="8" fill="{fill_hi}"/>
   <rect x="40" y="24" width="8"  height="8" fill="{fill}"/>
   <rect x="48" y="24" width="8"  height="8" fill="{fill_lo}"/>
   <rect x="56" y="24" width="8"  height="8" fill="{accent}"/>
   <rect x="64" y="24" width="8"  height="8" fill="{stroke}"/>
-  <!-- Row 4: --  --  ##  HH  ..  ..  oo  oo  ##  -- -->
+  <!-- Row 4:         ##  HH  ..  ..  oo  oo  ##     -->
   <rect x="16" y="32" width="8"  height="8" fill="{stroke}"/>
   <rect x="24" y="32" width="8"  height="8" fill="{fill_hi}"/>
   <rect x="32" y="32" width="16" height="8" fill="{fill}"/>
   <rect x="48" y="32" width="16" height="8" fill="{fill_lo}"/>
   <rect x="64" y="32" width="8"  height="8" fill="{stroke}"/>
-  <!-- Row 5: --  --  --  ##  HH  ..  oo  oo  ##  -- -->
+  <!-- Row 5:             ##  HH  ..  oo  oo  ##     -->
   <rect x="24" y="40" width="8"  height="8" fill="{stroke}"/>
   <rect x="32" y="40" width="8"  height="8" fill="{fill_hi}"/>
   <rect x="40" y="40" width="8"  height="8" fill="{fill}"/>
   <rect x="48" y="40" width="16" height="8" fill="{fill_lo}"/>
   <rect x="64" y="40" width="8"  height="8" fill="{stroke}"/>
-  <!-- Row 6: --  --  ##  HH  ..  oo  ##  --  --  -- -->
+  <!-- Row 6:         ##  HH  ..  oo  ##             -->
   <rect x="16" y="48" width="8"  height="8" fill="{stroke}"/>
   <rect x="24" y="48" width="8"  height="8" fill="{fill_hi}"/>
   <rect x="32" y="48" width="8"  height="8" fill="{fill}"/>
   <rect x="40" y="48" width="8"  height="8" fill="{fill_lo}"/>
   <rect x="48" y="48" width="8"  height="8" fill="{stroke}"/>
-  <!-- Row 7: --  --  ##  ##  ##  ##  ##  ##  --  -- -->
+  <!-- Row 7:         ##  ##  ##  ##  ##  ##         -->
   <rect x="16" y="56" width="48" height="8" fill="{stroke}"/>
   <!-- Row 8: ##  HH  HH  ..  ..  ..  oo  oo  oo  ## -->
   <rect x="0"  y="64" width="8"  height="8" fill="{stroke}"/>

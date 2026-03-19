@@ -10,8 +10,17 @@
   <rect x="8"  y="8"  width="8"  height="8" fill="{stroke}"/>
   <rect x="32" y="8"  width="16" height="8" fill="{stroke}"/>
   <rect x="64" y="8"  width="8"  height="8" fill="{stroke}"/>
-  <!-- Row 2: full-width crown band top (spikes merge into band) -->
-  <rect x="0"  y="16" width="80" height="8" fill="{stroke}"/>
+  <!-- Row 2: crown band — {stroke} at spike bases, {fill_lo} gaps between orbs -->
+  <rect x="0"  y="16" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="16" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="16" y="16" width="8"  height="8" fill="{stroke}"/>
+  <rect x="24" y="16" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="32" y="16" width="8"  height="8" fill="{stroke}"/>
+  <rect x="40" y="16" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="48" y="16" width="8"  height="8" fill="{stroke}"/>
+  <rect x="56" y="16" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="64" y="16" width="8"  height="8" fill="{stroke}"/>
+  <rect x="72" y="16" width="8"  height="8" fill="{fill_lo}"/>
   <!-- Row 3: crown band upper interior -->
   <rect x="0"  y="24" width="8"  height="8" fill="{stroke}"/>
   <rect x="8"  y="24" width="32" height="8" fill="{fill_hi}"/>

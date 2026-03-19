@@ -1,16 +1,47 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
-  <!--
-    King: prominent cross on top, tapering crown body below.
-    Cross vertical overlaps body top by 2 px to ensure no gap.
-  -->
-  <!-- Cross: vertical bar -->
-  <rect x="35" y="4"  width="10" height="28" rx="2" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Cross: horizontal bar -->
-  <rect x="23" y="12" width="34" height="10" rx="2" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Crown body: trapezoid wider at bottom, overlaps cross bottom by 2 px -->
-  <polygon points="20,30 60,30 66,56 14,56" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Collar -->
-  <rect x="12" y="55" width="56" height="6"  rx="2" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Base -->
-  <rect x="8"  y="60" width="64" height="14" rx="4" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Pixel art king: 10x10 block grid, 8 units per block, rects only -->
+  <!-- Bold cross: vertical shaft (cols 3-6) + full-width horizontal bar (rows 3-5) -->
+
+  <!-- Row 0: vertical top cap (cols 3-6) -->
+  <rect x="24" y="0"  width="32" height="8" fill="{stroke}"/>
+  <!-- Row 1: vertical shaft -->
+  <rect x="24" y="8"  width="8"  height="8" fill="{stroke}"/>
+  <rect x="32" y="8"  width="8"  height="8" fill="{fill_hi}"/>
+  <rect x="40" y="8"  width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="48" y="8"  width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 2: vertical shaft -->
+  <rect x="24" y="16" width="8"  height="8" fill="{stroke}"/>
+  <rect x="32" y="16" width="8"  height="8" fill="{fill_hi}"/>
+  <rect x="40" y="16" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="48" y="16" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 3: horizontal top edge — interior cols 4-5 stay filled so cross reads as one shape -->
+  <rect x="0"  y="24" width="32" height="8" fill="{stroke}"/>
+  <rect x="32" y="24" width="8"  height="8" fill="{fill_hi}"/>
+  <rect x="40" y="24" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="48" y="24" width="32" height="8" fill="{stroke}"/>
+  <!-- Row 4: horizontal bar interior -->
+  <rect x="0"  y="32" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="32" width="32" height="8" fill="{fill_hi}"/>
+  <rect x="40" y="32" width="32" height="8" fill="{fill_lo}"/>
+  <rect x="72" y="32" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 5: horizontal bottom edge — interior cols 4-5 stay filled -->
+  <rect x="0"  y="40" width="32" height="8" fill="{stroke}"/>
+  <rect x="32" y="40" width="8"  height="8" fill="{fill_hi}"/>
+  <rect x="40" y="40" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="48" y="40" width="32" height="8" fill="{stroke}"/>
+  <!-- Row 6: vertical shaft -->
+  <rect x="24" y="48" width="8"  height="8" fill="{stroke}"/>
+  <rect x="32" y="48" width="8"  height="8" fill="{fill_hi}"/>
+  <rect x="40" y="48" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="48" y="48" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 7: vertical bottom cap (cols 3-6) -->
+  <rect x="24" y="56" width="32" height="8" fill="{stroke}"/>
+  <!-- Row 8: base -->
+  <rect x="0"  y="64" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="64" width="16" height="8" fill="{fill_hi}"/>
+  <rect x="24" y="64" width="24" height="8" fill="{fill}"/>
+  <rect x="48" y="64" width="24" height="8" fill="{fill_lo}"/>
+  <rect x="72" y="64" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 9: base bottom outline -->
+  <rect x="0"  y="72" width="80" height="8" fill="{stroke}"/>
 </svg>

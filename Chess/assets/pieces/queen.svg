@@ -1,21 +1,49 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
-  <!--
-    Queen crown: W-shaped crown body + 3 balls on the tips + tapered body.
-    Crown W and body polygon are merged into one polygon to eliminate seam.
-  -->
-  <!-- Three crown balls (drawn first so crown polygon covers their inner edges) -->
-  <circle cx="10" cy="22" r="8" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <circle cx="40" cy="8"  r="9" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <circle cx="70" cy="22" r="8" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!--
-    Crown + body as one polygon:
-    bottom-left → left crown tip → left valley → centre crown tip →
-    right valley → right crown tip → bottom-right → tapered base sides
-  -->
-  <polygon points="6,62 6,50 10,30 26,46 40,17 54,46 70,30 74,50 74,62 60,62 20,62"
-           fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Collar -->
-  <rect x="6"  y="61" width="68" height="6"  rx="2" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
-  <!-- Base -->
-  <rect x="4"  y="66" width="72" height="10" rx="4" fill="{fill}" stroke="{stroke}" stroke-width="2"/>
+  <!-- Pixel art queen: 10x10 block grid, 8 units per block, rects only -->
+  <!-- Crown: 3 isolated spikes (col 1, cols 4-5, col 8) rising from solid band -->
+
+  <!-- Row 0: three spikes (col 1, cols 4-5, col 8) -->
+  <rect x="8"  y="0"  width="8"  height="8" fill="{stroke}"/>
+  <rect x="32" y="0"  width="16" height="8" fill="{stroke}"/>
+  <rect x="64" y="0"  width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 1: three spikes continued -->
+  <rect x="8"  y="8"  width="8"  height="8" fill="{stroke}"/>
+  <rect x="32" y="8"  width="16" height="8" fill="{stroke}"/>
+  <rect x="64" y="8"  width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 2: crown band — {stroke} at spike bases, {fill_lo} gaps between orbs -->
+  <rect x="0"  y="16" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="16" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="16" y="16" width="8"  height="8" fill="{stroke}"/>
+  <rect x="24" y="16" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="32" y="16" width="8"  height="8" fill="{stroke}"/>
+  <rect x="40" y="16" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="48" y="16" width="8"  height="8" fill="{stroke}"/>
+  <rect x="56" y="16" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="64" y="16" width="8"  height="8" fill="{stroke}"/>
+  <rect x="72" y="16" width="8"  height="8" fill="{fill_lo}"/>
+  <!-- Row 3: crown band upper interior -->
+  <rect x="0"  y="24" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="24" width="32" height="8" fill="{fill_hi}"/>
+  <rect x="40" y="24" width="32" height="8" fill="{fill_lo}"/>
+  <rect x="72" y="24" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 4: crown band lower interior -->
+  <rect x="0"  y="32" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="32" width="24" height="8" fill="{fill_hi}"/>
+  <rect x="32" y="32" width="16" height="8" fill="{fill}"/>
+  <rect x="48" y="32" width="24" height="8" fill="{fill_lo}"/>
+  <rect x="72" y="32" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 5: collar (cols 1-8) -->
+  <rect x="8"  y="40" width="64" height="8" fill="{stroke}"/>
+  <!-- Row 6: collar (cols 1-8) -->
+  <rect x="8"  y="48" width="64" height="8" fill="{stroke}"/>
+  <!-- Row 7: narrow base top (cols 2-7) -->
+  <rect x="16" y="56" width="48" height="8" fill="{stroke}"/>
+  <!-- Row 8: base -->
+  <rect x="0"  y="64" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="64" width="16" height="8" fill="{fill_hi}"/>
+  <rect x="24" y="64" width="24" height="8" fill="{fill}"/>
+  <rect x="48" y="64" width="24" height="8" fill="{fill_lo}"/>
+  <rect x="72" y="64" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 9: base bottom outline -->
+  <rect x="0"  y="72" width="80" height="8" fill="{stroke}"/>
 </svg>

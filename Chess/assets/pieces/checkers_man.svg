@@ -1,4 +1,48 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
-  <circle cx="40" cy="40" r="30" fill="{fill}" stroke="{stroke}" stroke-width="3"/>
-  <circle cx="40" cy="40" r="18" fill="none" stroke="{stroke}" stroke-width="2"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+  <!-- Pixel art checkers man: 10x10 block grid, 8 units per block, rects only -->
+  <!-- Full disc: rounded top/bottom, highlight left, shadow right             -->
+
+  <!-- Row 0:         ##  ##  ##  ##  ##  ##         -->
+  <rect x="16" y="0"  width="48" height="8" fill="{stroke}"/>
+  <!-- Row 1:     ##  HH  HH  HH  oo  oo  oo  ##     -->
+  <rect x="8"  y="8"  width="8"  height="8" fill="{stroke}"/>
+  <rect x="16" y="8"  width="24" height="8" fill="{fill_hi}"/>
+  <rect x="40" y="8"  width="24" height="8" fill="{fill_lo}"/>
+  <rect x="64" y="8"  width="8"  height="8" fill="{stroke}"/>
+  <!-- Rows 2-6: disc body -->
+  <rect x="0"  y="16" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="16" width="16" height="8" fill="{fill_hi}"/>
+  <rect x="24" y="16" width="24" height="8" fill="{fill}"/>
+  <rect x="48" y="16" width="24" height="8" fill="{fill_lo}"/>
+  <rect x="72" y="16" width="8"  height="8" fill="{stroke}"/>
+  <rect x="0"  y="24" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="24" width="16" height="8" fill="{fill_hi}"/>
+  <rect x="24" y="24" width="24" height="8" fill="{fill}"/>
+  <rect x="48" y="24" width="24" height="8" fill="{fill_lo}"/>
+  <rect x="72" y="24" width="8"  height="8" fill="{stroke}"/>
+  <rect x="0"  y="32" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="32" width="16" height="8" fill="{fill_hi}"/>
+  <rect x="24" y="32" width="24" height="8" fill="{fill}"/>
+  <rect x="48" y="32" width="24" height="8" fill="{fill_lo}"/>
+  <rect x="72" y="32" width="8"  height="8" fill="{stroke}"/>
+  <rect x="0"  y="40" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="40" width="16" height="8" fill="{fill_hi}"/>
+  <rect x="24" y="40" width="24" height="8" fill="{fill}"/>
+  <rect x="48" y="40" width="24" height="8" fill="{fill_lo}"/>
+  <rect x="72" y="40" width="8"  height="8" fill="{stroke}"/>
+  <rect x="0"  y="48" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="48" width="16" height="8" fill="{fill_hi}"/>
+  <rect x="24" y="48" width="24" height="8" fill="{fill}"/>
+  <rect x="48" y="48" width="24" height="8" fill="{fill_lo}"/>
+  <rect x="72" y="48" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 7: ##  oo  oo  oo  oo  oo  oo  oo  oo  ## -->
+  <rect x="0"  y="56" width="8"  height="8" fill="{stroke}"/>
+  <rect x="8"  y="56" width="64" height="8" fill="{fill_lo}"/>
+  <rect x="72" y="56" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 8:     ##  oo  oo  oo  oo  oo  oo  ##     -->
+  <rect x="8"  y="64" width="8"  height="8" fill="{stroke}"/>
+  <rect x="16" y="64" width="48" height="8" fill="{fill_lo}"/>
+  <rect x="64" y="64" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 9:         ##  ##  ##  ##  ##  ##         -->
+  <rect x="16" y="72" width="48" height="8" fill="{stroke}"/>
 </svg>

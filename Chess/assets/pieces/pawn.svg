@@ -1,24 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
   <!-- Pixel art pawn: 10x10 block grid, 8 units per block, rects only -->
-  <!-- head (5px wide, cols 3-7); shoulder (8px, cols 1-8); base (10px) -->
+  <!-- Head: 4-wide (cols 3-6), centred over shoulder (cols 1-8) and base (cols 0-9) -->
 
-  <!-- Row 0: head top outline -->
-  <rect x="32" y="0"  width="24" height="8" fill="{stroke}"/>
+  <!-- Row 0: head top outline (cols 3-6) -->
+  <rect x="24" y="0"  width="32" height="8" fill="{stroke}"/>
   <!-- Row 1: head body -->
   <rect x="24" y="8"  width="8"  height="8" fill="{stroke}"/>
   <rect x="32" y="8"  width="8"  height="8" fill="{fill_hi}"/>
-  <rect x="40" y="8"  width="8"  height="8" fill="{fill}"/>
-  <rect x="48" y="8"  width="8"  height="8" fill="{fill_lo}"/>
-  <rect x="56" y="8"  width="8"  height="8" fill="{stroke}"/>
+  <rect x="40" y="8"  width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="48" y="8"  width="8"  height="8" fill="{stroke}"/>
   <!-- Row 2: head body -->
   <rect x="24" y="16" width="8"  height="8" fill="{stroke}"/>
   <rect x="32" y="16" width="8"  height="8" fill="{fill_hi}"/>
-  <rect x="40" y="16" width="8"  height="8" fill="{fill}"/>
-  <rect x="48" y="16" width="8"  height="8" fill="{fill_lo}"/>
-  <rect x="56" y="16" width="8"  height="8" fill="{stroke}"/>
-  <!-- Row 3: head bottom outline -->
-  <rect x="32" y="24" width="24" height="8" fill="{stroke}"/>
-  <!-- Row 4: shoulder connector -->
+  <rect x="40" y="16" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="48" y="16" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 3: head bottom outline (cols 3-6) -->
+  <rect x="24" y="24" width="32" height="8" fill="{stroke}"/>
+  <!-- Row 4: shoulder connector (cols 1-8) -->
   <rect x="8"  y="32" width="64" height="8" fill="{stroke}"/>
   <!-- Row 5: shoulder body -->
   <rect x="8"  y="40" width="8"  height="8" fill="{stroke}"/>

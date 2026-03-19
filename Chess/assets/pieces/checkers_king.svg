@@ -1,38 +1,51 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
   <!-- Pixel art checkers king: 10x10 block grid, 8 units per block, rects only -->
-  <!-- Same disc as checkers_man + 3 accent crown gems above                    -->
+  <!-- Identical disc to checkers_man; accent ring in centre rows 3-6           -->
 
-  <!-- Row 0: three accent crown gems (at cols 1, 4, 7) -->
-  <rect x="8"  y="0"  width="8"  height="8" fill="{accent}"/>
-  <rect x="32" y="0"  width="8"  height="8" fill="{accent}"/>
-  <rect x="56" y="0"  width="8"  height="8" fill="{accent}"/>
-  <!-- Row 1: disc top outline (cols 1-8) -->
-  <rect x="8"  y="8"  width="64" height="8" fill="{stroke}"/>
-  <!-- Row 2: disc upper (highlight left, shadow right) -->
+  <!-- Row 0: disc top outline (cols 2-7) -->
+  <rect x="16" y="0"  width="48" height="8" fill="{stroke}"/>
+  <!-- Row 1: disc upper highlight/shadow -->
+  <rect x="8"  y="8"  width="8"  height="8" fill="{stroke}"/>
+  <rect x="16" y="8"  width="24" height="8" fill="{fill_hi}"/>
+  <rect x="40" y="8"  width="24" height="8" fill="{fill_lo}"/>
+  <rect x="64" y="8"  width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 2: disc body -->
   <rect x="0"  y="16" width="8"  height="8" fill="{stroke}"/>
-  <rect x="8"  y="16" width="32" height="8" fill="{fill_hi}"/>
-  <rect x="40" y="16" width="32" height="8" fill="{fill_lo}"/>
+  <rect x="8"  y="16" width="16" height="8" fill="{fill_hi}"/>
+  <rect x="24" y="16" width="24" height="8" fill="{fill}"/>
+  <rect x="48" y="16" width="24" height="8" fill="{fill_lo}"/>
   <rect x="72" y="16" width="8"  height="8" fill="{stroke}"/>
-  <!-- Rows 3-6: disc body -->
+  <!-- Row 3: disc body with accent ring top (cols 4-5) -->
   <rect x="0"  y="24" width="8"  height="8" fill="{stroke}"/>
   <rect x="8"  y="24" width="16" height="8" fill="{fill_hi}"/>
-  <rect x="24" y="24" width="24" height="8" fill="{fill}"/>
-  <rect x="48" y="24" width="24" height="8" fill="{fill_lo}"/>
+  <rect x="24" y="24" width="8"  height="8" fill="{fill}"/>
+  <rect x="32" y="24" width="16" height="8" fill="{accent}"/>
+  <rect x="48" y="24" width="8"  height="8" fill="{fill}"/>
+  <rect x="56" y="24" width="16" height="8" fill="{fill_lo}"/>
   <rect x="72" y="24" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 4: disc body with accent ring sides (col 3 and col 6) -->
   <rect x="0"  y="32" width="8"  height="8" fill="{stroke}"/>
   <rect x="8"  y="32" width="16" height="8" fill="{fill_hi}"/>
-  <rect x="24" y="32" width="24" height="8" fill="{fill}"/>
-  <rect x="48" y="32" width="24" height="8" fill="{fill_lo}"/>
+  <rect x="24" y="32" width="8"  height="8" fill="{accent}"/>
+  <rect x="32" y="32" width="16" height="8" fill="{fill}"/>
+  <rect x="48" y="32" width="8"  height="8" fill="{accent}"/>
+  <rect x="56" y="32" width="16" height="8" fill="{fill_lo}"/>
   <rect x="72" y="32" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 5: disc body with accent ring sides (col 3 and col 6) -->
   <rect x="0"  y="40" width="8"  height="8" fill="{stroke}"/>
   <rect x="8"  y="40" width="16" height="8" fill="{fill_hi}"/>
-  <rect x="24" y="40" width="24" height="8" fill="{fill}"/>
-  <rect x="48" y="40" width="24" height="8" fill="{fill_lo}"/>
+  <rect x="24" y="40" width="8"  height="8" fill="{accent}"/>
+  <rect x="32" y="40" width="16" height="8" fill="{fill}"/>
+  <rect x="48" y="40" width="8"  height="8" fill="{accent}"/>
+  <rect x="56" y="40" width="16" height="8" fill="{fill_lo}"/>
   <rect x="72" y="40" width="8"  height="8" fill="{stroke}"/>
+  <!-- Row 6: disc body with accent ring bottom (cols 4-5) -->
   <rect x="0"  y="48" width="8"  height="8" fill="{stroke}"/>
   <rect x="8"  y="48" width="16" height="8" fill="{fill_hi}"/>
-  <rect x="24" y="48" width="24" height="8" fill="{fill}"/>
-  <rect x="48" y="48" width="24" height="8" fill="{fill_lo}"/>
+  <rect x="24" y="48" width="8"  height="8" fill="{fill}"/>
+  <rect x="32" y="48" width="16" height="8" fill="{accent}"/>
+  <rect x="48" y="48" width="8"  height="8" fill="{fill}"/>
+  <rect x="56" y="48" width="16" height="8" fill="{fill_lo}"/>
   <rect x="72" y="48" width="8"  height="8" fill="{stroke}"/>
   <!-- Row 7: disc shadow bottom -->
   <rect x="0"  y="56" width="8"  height="8" fill="{stroke}"/>

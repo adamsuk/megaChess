@@ -24,10 +24,13 @@
   <rect x="16" y="32" width="24" height="8" fill="{fill_hi}"/>
   <rect x="40" y="32" width="24" height="8" fill="{fill_lo}"/>
   <rect x="64" y="32" width="8"  height="8" fill="{stroke}"/>
-  <!-- Row 5: horizontal band with accent gem (cols 1-8, A at col 4) -->
-  <rect x="8"  y="40" width="24" height="8" fill="{stroke}"/>
+  <!-- Row 5: horizontal band with accent gem (stroke only at edges, fill_lo sides) -->
+  <rect x="8"  y="40" width="8"  height="8" fill="{stroke}"/>
+  <rect x="16" y="40" width="16" height="8" fill="{fill_lo}"/>
   <rect x="32" y="40" width="8"  height="8" fill="{accent}"/>
-  <rect x="40" y="40" width="32" height="8" fill="{stroke}"/>
+  <rect x="40" y="40" width="16" height="8" fill="{fill_lo}"/>
+  <rect x="56" y="40" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="64" y="40" width="8"  height="8" fill="{stroke}"/>
   <!-- Row 6: body below band (6px, cols 2-7) -->
   <rect x="16" y="48" width="8"  height="8" fill="{stroke}"/>
   <rect x="24" y="48" width="16" height="8" fill="{fill_hi}"/>

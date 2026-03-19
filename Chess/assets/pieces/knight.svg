@@ -15,12 +15,12 @@
   <rect x="40" y="16" width="8"  height="8" fill="{fill}"/>
   <rect x="48" y="16" width="8"  height="8" fill="{fill_lo}"/>
   <rect x="56" y="16" width="8"  height="8" fill="{stroke}"/>
-  <!-- Row 3: head (cols 2-8, 7px), accent eye at col 6 -->
+  <!-- Row 3: head (cols 2-8, 7px), accent eye at col 7 (cheek) -->
   <rect x="16" y="24" width="8"  height="8" fill="{stroke}"/>
   <rect x="24" y="24" width="16" height="8" fill="{fill_hi}"/>
   <rect x="40" y="24" width="8"  height="8" fill="{fill}"/>
-  <rect x="48" y="24" width="8"  height="8" fill="{accent}"/>
-  <rect x="56" y="24" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="48" y="24" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="56" y="24" width="8"  height="8" fill="{accent}"/>
   <rect x="64" y="24" width="8"  height="8" fill="{stroke}"/>
   <!-- Row 4: head lower (cols 2-8) -->
   <rect x="16" y="32" width="8"  height="8" fill="{stroke}"/>

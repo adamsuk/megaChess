@@ -5,10 +5,12 @@
 
   <!-- Row 0: cross vertical top (3px, cols 3-5) -->
   <rect x="24" y="0"  width="24" height="8" fill="{stroke}"/>
-  <!-- Row 1: cross horizontal bar (7px, cols 1-7, accent at col 4) -->
-  <rect x="8"  y="8"  width="24" height="8" fill="{stroke}"/>
+  <!-- Row 1: cross horizontal bar (stroke tips, fill_hi arms, accent centre) -->
+  <rect x="8"  y="8"  width="8"  height="8" fill="{stroke}"/>
+  <rect x="16" y="8"  width="16" height="8" fill="{fill_hi}"/>
   <rect x="32" y="8"  width="8"  height="8" fill="{accent}"/>
-  <rect x="40" y="8"  width="24" height="8" fill="{stroke}"/>
+  <rect x="40" y="8"  width="16" height="8" fill="{fill_hi}"/>
+  <rect x="56" y="8"  width="8"  height="8" fill="{stroke}"/>
   <!-- Row 2: cross vertical connecting (3px, cols 3-5, highlight in middle) -->
   <rect x="24" y="16" width="8"  height="8" fill="{stroke}"/>
   <rect x="32" y="16" width="8"  height="8" fill="{fill_hi}"/>

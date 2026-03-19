@@ -21,6 +21,17 @@ except NameError:
     # Python 3, xrange is now named range
     xrange = range
 
+
+def _pixel_text(text, size, color, bold=False):
+    """Return a pygame Surface with genuine pixel-art text.
+    Renders at half size with no antialiasing, then scales up 2x with
+    pygame.transform.scale (nearest-neighbour) for a chunky retro look."""
+    font = pygame.font.Font('freesansbold.ttf' if bold else None, max(size // 2, 6))
+    surf = font.render(text, False, color)
+    w, h = surf.get_size()
+    return pygame.transform.scale(surf, (w * 2, h * 2))
+
+
 class Game:
 
     def __init__(self):
@@ -254,7 +265,7 @@ class Graphics:
             'fill':    '#1C1630',  # deep indigo base
             'fill_hi': '#342C50',  # purple highlight
             'fill_lo': '#0C0818',  # near-black shadow
-            'stroke':  '#9880C8',  # soft lavender outline
+            'stroke':  '#4A3870',  # dark purple outline
             'accent':  '#6040A8',  # purple gem accent
         },
     }
@@ -336,7 +347,6 @@ class Graphics:
         pygame.draw.line(self.screen, (20, 15, 40),
                          (0, self.window_size + 2), (self.window_size, self.window_size + 2), 1)
 
-        font  = pygame.font.Font('freesansbold.ttf', 18)
         BEVEL = 2
 
         for label, rect, enabled, toggled in [
@@ -368,9 +378,9 @@ class Graphics:
             pygame.draw.line(self.screen, bhi, rect.topleft,    rect.bottomleft,  BEVEL)
             pygame.draw.line(self.screen, blo, rect.bottomleft, rect.bottomright, BEVEL)
             pygame.draw.line(self.screen, blo, rect.topright,   rect.bottomright, BEVEL)
-            # Text with drop shadow
-            shadow_s = font.render(label, True, (0, 0, 0))
-            text_s   = font.render(label, True, tc)
+            # Text with drop shadow — pixel art (blocky, no antialiasing)
+            shadow_s = _pixel_text(label, 18, (0, 0, 0), bold=True)
+            text_s   = _pixel_text(label, 18, tc,        bold=True)
             self.screen.blit(shadow_s, shadow_s.get_rect(center=(rect.centerx + 1, rect.centery + 1)))
             self.screen.blit(text_s,   text_s.get_rect(center=rect.center))
 
@@ -394,15 +404,13 @@ class Graphics:
             pygame.draw.rect(self.screen, Colours.HIGH,
                              (f - 5 + cx_off, f - 5 + cy_off, 6, 6))
 
-        # Coordinate labels — freesansbold with 1px drop shadow for pixel art look
+        # Coordinate labels — pixel art style (blocky, no antialiasing)
         fsize = max(f - 10, 9)
-        lbl_font = pygame.font.Font('freesansbold.ttf', fsize)
-        shadow_col = (0, 0, 0)
         files = 'abcdefghijklmnopqrstuvwxyz'[:n]
         for i, ch in enumerate(files):
             cx = f + i * sq + sq // 2
-            shadow = lbl_font.render(ch, True, shadow_col)
-            lbl    = lbl_font.render(ch, True, Colours.GOLD)
+            shadow = _pixel_text(ch, fsize, (0, 0, 0), bold=True)
+            lbl    = _pixel_text(ch, fsize, Colours.GOLD, bold=True)
             for centery in (f // 2, f + board_px + f // 2):
                 r = lbl.get_rect(centerx=cx, centery=centery)
                 self.screen.blit(shadow, r.move(1, 1))
@@ -410,8 +418,8 @@ class Graphics:
         for i in range(n):
             cy = f + i * sq + sq // 2
             ch = str(n - i)
-            shadow = lbl_font.render(ch, True, shadow_col)
-            lbl    = lbl_font.render(ch, True, Colours.GOLD)
+            shadow = _pixel_text(ch, fsize, (0, 0, 0), bold=True)
+            lbl    = _pixel_text(ch, fsize, Colours.GOLD, bold=True)
             for centerx in (f // 2, f + board_px + f // 2):
                 r = lbl.get_rect(centerx=centerx, centery=cy)
                 self.screen.blit(shadow, r.move(1, 1))
@@ -574,8 +582,7 @@ class Graphics:
     def draw_message(self, message):
         """Draws a permanent centred message (win / stalemate) with pixel art border box."""
         self.message = True
-        font = pygame.font.Font('freesansbold.ttf', 44)
-        text = font.render(message, True, Colours.HIGH)
+        text = _pixel_text(message, 44, Colours.HIGH, bold=True)
         pad = 16
         tw = text.get_width() + pad * 2
         th = text.get_height() + pad
@@ -589,8 +596,7 @@ class Graphics:
 
     def draw_timed_message(self, message, duration_ms=3000):
         """Draws a temporary message near the top of the board — pixel art teal banner."""
-        font = pygame.font.Font('freesansbold.ttf', 36)
-        text = font.render(message, True, (8, 8, 18))
+        text = _pixel_text(message, 36, (8, 8, 18), bold=True)
         tw = text.get_width() + 24
         th = text.get_height() + 12
         bg = pygame.Surface((tw + 6, th + 6))
@@ -690,7 +696,7 @@ PIECE_THEMES = {
         'white': {'fill': '#EAD9B0', 'fill_hi': '#F8EFD0', 'fill_lo': '#B89660',
                   'stroke': '#2A1808', 'accent': '#D4A020'},
         'black': {'fill': '#1C1630', 'fill_hi': '#342C50', 'fill_lo': '#0C0818',
-                  'stroke': '#9880C8', 'accent': '#6040A8'},
+                  'stroke': '#4A3870', 'accent': '#6040A8'},
     },
     'Arctic':   {
         'white': {'fill': '#D8EEF8', 'fill_hi': '#F0F8FF', 'fill_lo': '#90BCD8',
@@ -1919,9 +1925,6 @@ def _start_menu(screen, w, h):
     Simple title screen.  Returns 'play', 'edit_pieces', or 'edit_layout'.
     """
     pygame.display.set_caption('megaChess')
-    mega_font  = pygame.font.Font('freesansbold.ttf', 72)
-    sub_font   = pygame.font.Font('freesansbold.ttf', 16)
-    btn_font   = pygame.font.Font('freesansbold.ttf', 24)
     clock = pygame.time.Clock()
     bw, bh = 210, 56
     gap = 16
@@ -1942,6 +1945,13 @@ def _start_menu(screen, w, h):
         'Edit Pieces': 'edit_pieces',
         'Edit Layout': 'edit_layout',
     }
+
+    # Pre-build pixel-art grid overlay (subtle tile grid)
+    grid_overlay = pygame.Surface((w, h), pygame.SRCALPHA)
+    for gx in range(0, w, 16):
+        pygame.draw.line(grid_overlay, (255, 255, 255, 12), (gx, 0), (gx, h))
+    for gy in range(0, h, 16):
+        pygame.draw.line(grid_overlay, (255, 255, 255, 12), (0, gy), (w, gy))
 
     # Pre-build scanline overlay (CRT retro effect)
     scanlines = pygame.Surface((w, h), pygame.SRCALPHA)
@@ -1991,7 +2001,8 @@ def _start_menu(screen, w, h):
                     return 'edit_layout'
 
         screen.fill((10, 8, 20))
-        # Corner chess board decorations (pixel art motif)
+        # Pixel-art grid + corner chess board decorations
+        screen.blit(grid_overlay, (0, 0))
         margin = 16
         screen.blit(_corner_surf, (margin, margin))
         screen.blit(pygame.transform.flip(_corner_surf, True,  False), (w - _corner_w - margin, margin))
@@ -2000,8 +2011,8 @@ def _start_menu(screen, w, h):
         screen.blit(scanlines, (0, 0))
 
         # Stacked two-colour pixel art title: MEGA (gold) + CHESS (teal)
-        mega_surf  = mega_font.render('MEGA',  True, Colours.GOLD)
-        chess_surf = mega_font.render('CHESS', True, Colours.HIGH)
+        mega_surf  = _pixel_text('MEGA',  72, Colours.GOLD, bold=True)
+        chess_surf = _pixel_text('CHESS', 72, Colours.HIGH, bold=True)
         title_w  = max(mega_surf.get_width(), chess_surf.get_width())
         title_h  = mega_surf.get_height() + chess_surf.get_height() + 4
         frame_x  = w // 2 - title_w // 2 - 24
@@ -2018,18 +2029,21 @@ def _start_menu(screen, w, h):
         pygame.draw.line(screen, (80, 215, 215), (bx, by), (bx, by + bh2), 1)
         pygame.draw.line(screen, (20, 40, 80), (bx, by + bh2), (bx + bw2, by + bh2), 1)
         pygame.draw.line(screen, (20, 40, 80), (bx + bw2, by), (bx + bw2, by + bh2), 1)
+        # Pixel art corner dots on title box
+        for _dx, _dy in [(bx, by), (bx + bw2 - 4, by), (bx, by + bh2 - 4), (bx + bw2 - 4, by + bh2 - 4)]:
+            pygame.draw.rect(screen, Colours.GOLD, (_dx, _dy, 4, 4))
         # Render titles centred inside box
         cx = bx + bw2 // 2
         screen.blit(mega_surf,  mega_surf.get_rect(centerx=cx,  top=frame_y + pad))
         screen.blit(chess_surf, chess_surf.get_rect(centerx=cx, top=frame_y + pad + mega_surf.get_height() + 4))
 
-        # Blinking cursor prompt
+        # Blinking cursor prompt — pixel art text
         blink = (pygame.time.get_ticks() // 500) % 2
         hint_str = 'PRESS ENTER TO PLAY' + (' _' if blink else '  ')
-        hint_s = sub_font.render(hint_str, True, (140, 130, 170))
+        hint_s = _pixel_text(hint_str, 16, (140, 130, 170), bold=True)
         screen.blit(hint_s, hint_s.get_rect(centerx=w // 2, top=frame_y + title_h + pad * 2 + 24))
 
-        sub = sub_font.render('E = edit pieces   •   L = edit layout', True, (100, 90, 130))
+        sub = _pixel_text('E = edit pieces   *   L = edit layout', 16, (100, 90, 130), bold=True)
         screen.blit(sub, sub.get_rect(centerx=w // 2, top=frame_y + title_h + pad * 2 + 52))
 
         BEVEL = 2
@@ -2044,8 +2058,8 @@ def _start_menu(screen, w, h):
             pygame.draw.line(screen, bhi, rect.topleft,    rect.bottomleft,  BEVEL)
             pygame.draw.line(screen, blo, rect.bottomleft, rect.bottomright, BEVEL)
             pygame.draw.line(screen, blo, rect.topright,   rect.bottomright, BEVEL)
-            shadow_s = btn_font.render(label, True, (0, 0, 0))
-            txt_s    = btn_font.render(label, True, (220, 225, 235))
+            shadow_s = _pixel_text(label, 24, (0, 0, 0),       bold=True)
+            txt_s    = _pixel_text(label, 24, (220, 225, 235),  bold=True)
             screen.blit(shadow_s, shadow_s.get_rect(center=(rect.centerx + 1, rect.centery + 1)))
             screen.blit(txt_s,    txt_s.get_rect(center=rect.center))
 

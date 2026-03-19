@@ -13,8 +13,15 @@
   <rect x="40" y="8"  width="8"  height="8" fill="{accent}"/>
   <rect x="56" y="8"  width="8"  height="8" fill="{stroke}"/>
   <rect x="64" y="8"  width="8"  height="8" fill="{accent}"/>
-  <!-- Row 2: crown connecting band (cols 1-8) -->
-  <rect x="8"  y="16" width="64" height="8" fill="{stroke}"/>
+  <!-- Row 2: crown connecting band (stroke at orb bases, fill_lo in gaps) -->
+  <rect x="8"  y="16" width="8"  height="8" fill="{stroke}"/>
+  <rect x="16" y="16" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="24" y="16" width="8"  height="8" fill="{stroke}"/>
+  <rect x="32" y="16" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="40" y="16" width="8"  height="8" fill="{stroke}"/>
+  <rect x="48" y="16" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="56" y="16" width="8"  height="8" fill="{stroke}"/>
+  <rect x="64" y="16" width="8"  height="8" fill="{fill_lo}"/>
   <!-- Row 3: crown body upper -->
   <rect x="0"  y="24" width="8"  height="8" fill="{stroke}"/>
   <rect x="8"  y="24" width="16" height="8" fill="{fill_hi}"/>

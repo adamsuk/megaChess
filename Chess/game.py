@@ -1865,12 +1865,13 @@ class BoardLayoutEditor:
             self.screen.blit(lbl, lbl.get_rect(centery=rect.centery, left=icon_x + 28))
 
         # ── Themes panel ─────────────────────────────────────────────────
-        thdr = self.tiny_font.render('BOARD THEME', True, self.TITLE_COLOR)
-        self.screen.blit(thdr, (px, theme_start_y + 2))
-        phdr = self.tiny_font.render('PIECE THEME', True, self.TITLE_COLOR)
-        bh_row = list(BOARD_THEMES.keys())[0]
-        phdr_y = theme_rects_map[('board', bh_row)].bottom + 6
-        self.screen.blit(phdr, (px, phdr_y))
+        if theme_rects_map:
+            thdr = self.tiny_font.render('BOARD THEME', True, self.TITLE_COLOR)
+            self.screen.blit(thdr, (px, theme_start_y + 2))
+            phdr = self.tiny_font.render('PIECE THEME', True, self.TITLE_COLOR)
+            bh_row = list(BOARD_THEMES.keys())[0]
+            phdr_y = theme_rects_map[('board', bh_row)].bottom + 6
+            self.screen.blit(phdr, (px, phdr_y))
 
         for (kind, name), rect in theme_rects_map.items():
             active = (name == self.board_theme if kind == 'board'
@@ -1886,8 +1887,9 @@ class BoardLayoutEditor:
         # ── Shade controls ────────────────────────────────────────────────
         shade_hdr = self.tiny_font.render('SHADES  [ - darker   + brighter ]',
                                           True, self.TITLE_COLOR)
-        self.screen.blit(shade_hdr, (px, shade_start_y - 14))
-        for i, (label, kind, sub, keys) in enumerate(self._SHADE_CONTROLS):
+        if shade_rects:
+            self.screen.blit(shade_hdr, (px, shade_start_y - 14))
+        for i, (label, kind, sub, keys) in enumerate(self._SHADE_CONTROLS) if shade_rects else []:
             mr, sr, pr = shade_rects[i]
             # Label
             ls = self.tiny_font.render(label, True, self.TEXT)

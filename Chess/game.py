@@ -260,9 +260,13 @@ class Graphics:
         _android = _on_android()
         _flags = pygame.FULLSCREEN if _android else 0
         self.window_size = max(0, min(info.current_w, info.current_h - self.button_bar_height))
-        self.screen = pygame.display.set_mode(
-            (self.window_size, self.window_size + self.button_bar_height), _flags
-        )
+        if _android:
+            self.screen_w = info.current_w
+            self.screen_h = info.current_h
+        else:
+            self.screen_w = self.window_size
+            self.screen_h = self.window_size + self.button_bar_height
+        self.screen = pygame.display.set_mode((self.screen_w, self.screen_h), _flags)
 
         self.board_size = 8
         self.square_size = self.window_size // self.board_size
@@ -350,34 +354,39 @@ class Graphics:
     def _btn_layout(self):
         """Returns (button_width, button_height, padding) for the 3-button bar."""
         pad = 8
-        bw = (self.window_size - pad * 4) // 3
+        bw = (self.screen_w - pad * 4) // 3
         bh = self.button_bar_height - pad * 2
         return bw, bh, pad
+
+    def _bar_y(self):
+        """Y coordinate where the button bar begins (always at screen bottom)."""
+        return self.screen_h - self.button_bar_height
 
     @property
     def save_btn_rect(self):
         bw, bh, pad = self._btn_layout()
-        return pygame.Rect(pad, self.window_size + pad, bw, bh)
+        return pygame.Rect(pad, self._bar_y() + pad, bw, bh)
 
     @property
     def load_btn_rect(self):
         bw, bh, pad = self._btn_layout()
-        return pygame.Rect(pad * 2 + bw, self.window_size + pad, bw, bh)
+        return pygame.Rect(pad * 2 + bw, self._bar_y() + pad, bw, bh)
 
     @property
     def hints_btn_rect(self):
         bw, bh, pad = self._btn_layout()
-        return pygame.Rect(pad * 3 + bw * 2, self.window_size + pad, bw, bh)
+        return pygame.Rect(pad * 3 + bw * 2, self._bar_y() + pad, bw, bh)
 
     def draw_button_bar(self, mouse_px, save_exists, show_hints=True):
         """Draw the Save / Load / Hints button strip below the board — pixel art style."""
-        bar_rect = pygame.Rect(0, self.window_size, self.window_size, self.button_bar_height)
+        bar_y = self._bar_y()
+        bar_rect = pygame.Rect(0, bar_y, self.screen_w, self.button_bar_height)
         pygame.draw.rect(self.screen, (8, 8, 18), bar_rect)
         # Pixel art divider: bright top line + dark second line
         pygame.draw.line(self.screen, (60, 50, 100),
-                         (0, self.window_size), (self.window_size, self.window_size), 2)
+                         (0, bar_y), (self.screen_w, bar_y), 2)
         pygame.draw.line(self.screen, (20, 15, 40),
-                         (0, self.window_size + 2), (self.window_size, self.window_size + 2), 1)
+                         (0, bar_y + 2), (self.screen_w, bar_y + 2), 1)
 
         BEVEL = 2
 
@@ -423,8 +432,8 @@ class Graphics:
         sq = self.square_size
         n  = self.board_size
         board_px = sq * n
-        # Dark background behind the frame area
-        pygame.draw.rect(self.screen, (8, 8, 18), (0, 0, self.window_size, self.window_size))
+        # Dark background behind the frame area (fill full screen so portrait gap is covered)
+        pygame.draw.rect(self.screen, (8, 8, 18), (0, 0, self.screen_w, self.screen_h))
 
         # Pixel art double-border: bright teal outer (3px) + dark inner (2px)
         pygame.draw.rect(self.screen, Colours.HIGH, (f - 5, f - 5, board_px + 10, board_px + 10), 3)
@@ -2224,15 +2233,28 @@ def _start_menu(screen, w, h):
     """
     pygame.display.set_caption('megaChess')
     clock = pygame.time.Clock()
-    bw, bh = 210, 56
     gap = 16
-    total_w = bw * 3 + gap * 2
-    x0 = w // 2 - total_w // 2
-    btns = {
-        'Play':         pygame.Rect(x0,                   h * 2 // 3, bw, bh),
-        'Edit Pieces':  pygame.Rect(x0 + (bw + gap),      h * 2 // 3, bw, bh),
-        'Edit Layout':  pygame.Rect(x0 + (bw + gap) * 2,  h * 2 // 3, bw, bh),
-    }
+    _portrait = h > w * 1.1
+    if _portrait:
+        bw = w - gap * 2
+        bh = 56
+        x0 = gap
+        btn_area_h = bh * 3 + gap * 2
+        y0 = h - btn_area_h - gap
+        btns = {
+            'Play':        pygame.Rect(x0, y0,                  bw, bh),
+            'Edit Pieces': pygame.Rect(x0, y0 + (bh + gap),     bw, bh),
+            'Edit Layout': pygame.Rect(x0, y0 + (bh + gap) * 2, bw, bh),
+        }
+    else:
+        bw, bh = 210, 56
+        total_w = bw * 3 + gap * 2
+        x0 = w // 2 - total_w // 2
+        btns = {
+            'Play':         pygame.Rect(x0,                   h * 2 // 3, bw, bh),
+            'Edit Pieces':  pygame.Rect(x0 + (bw + gap),      h * 2 // 3, bw, bh),
+            'Edit Layout':  pygame.Rect(x0 + (bw + gap) * 2,  h * 2 // 3, bw, bh),
+        }
     btn_colors = {
         'Play':        (30,  75, 150),
         'Edit Pieces': (30, 100,  55),
@@ -2371,8 +2393,11 @@ def _start_menu(screen, w, h):
 def main():
     pygame.init()
     info = pygame.display.Info()
-    w = h = min(info.current_w, info.current_h)
-    _android = 'ANDROID_ARGUMENT' in os.environ
+    _android = _on_android()
+    if _android:
+        w, h = info.current_w, info.current_h
+    else:
+        w = h = min(info.current_w, info.current_h)
     screen = pygame.display.set_mode((w, h), pygame.FULLSCREEN if _android else 0)
 
     custom_defs    = None

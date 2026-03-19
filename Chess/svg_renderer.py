@@ -172,11 +172,16 @@ def render_svg(svg_string, size):
                 if stroke: pygame.draw.circle(surface, stroke, (cx, cy), r, sw)
 
         elif tag == 'rect':
-            x  = round(float(elem.get('x',      0)) * sx)
-            y  = round(float(elem.get('y',      0)) * sy)
-            w  = round(float(elem.get('width',  0)) * sx)
-            h  = round(float(elem.get('height', 0)) * sy)
-            rx = round(float(elem.get('rx',     0)) * sx)
+            x_r = float(elem.get('x',      0))
+            y_r = float(elem.get('y',      0))
+            w_r = float(elem.get('width',  0))
+            h_r = float(elem.get('height', 0))
+            x  = round(x_r * sx)
+            y  = round(y_r * sy)
+            # Derive w/h from rounded end-coords so adjacent rects tile with no gaps
+            w  = round((x_r + w_r) * sx) - x
+            h  = round((y_r + h_r) * sy) - y
+            rx = round(float(elem.get('rx', 0)) * sx)
             if w > 0 and h > 0:
                 if fill:   pygame.draw.rect(surface, fill,   (x, y, w, h), border_radius=rx)
                 if stroke: pygame.draw.rect(surface, stroke, (x, y, w, h), sw, border_radius=rx)

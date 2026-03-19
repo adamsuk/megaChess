@@ -79,7 +79,12 @@ class Game:
                 elif event.key == locals.K_h:
                     self._toggle_hints()
 
-            self.click = event.type == locals.MOUSEBUTTONDOWN
+            if event.type == pygame.FINGERDOWN:
+                tw, th = self.graphics.screen.get_size()
+                self.pixel_mouse_pos = (int(event.x * tw), int(event.y * th))
+                self.mouse_pos = self.graphics.board_coords(self.pixel_mouse_pos)
+
+            self.click = event.type in (locals.MOUSEBUTTONDOWN, pygame.FINGERDOWN)
 
             if self.click:
                 px, py = self.pixel_mouse_pos
@@ -226,10 +231,12 @@ class Graphics:
 
         pygame.init()
         info = pygame.display.Info()
-        self.window_size = min(info.current_w, info.current_h)
         self.button_bar_height = 48
+        _android = 'ANDROID_ARGUMENT' in os.environ
+        _flags = pygame.FULLSCREEN if _android else 0
+        self.window_size = max(0, min(info.current_w, info.current_h - self.button_bar_height))
         self.screen = pygame.display.set_mode(
-            (self.window_size, self.window_size + self.button_bar_height)
+            (self.window_size, self.window_size + self.button_bar_height), _flags
         )
 
         self.board_size = 8
@@ -2113,7 +2120,10 @@ def _start_menu(screen, w, h):
             if event.type == locals.QUIT:
                 pygame.quit()
                 sys.exit()
-            if event.type == locals.MOUSEBUTTONDOWN:
+            if event.type == pygame.FINGERDOWN:
+                tw, th = screen.get_size()
+                mx, my = int(event.x * tw), int(event.y * th)
+            if event.type in (locals.MOUSEBUTTONDOWN, pygame.FINGERDOWN):
                 for label, rect in btns.items():
                     if rect.collidepoint(mx, my):
                         return key_map[label]
@@ -2196,7 +2206,8 @@ def main():
     pygame.init()
     info = pygame.display.Info()
     w = h = min(info.current_w, info.current_h)
-    screen = pygame.display.set_mode((w, h))
+    _android = 'ANDROID_ARGUMENT' in os.environ
+    screen = pygame.display.set_mode((w, h), pygame.FULLSCREEN if _android else 0)
 
     custom_defs    = None
     custom_layout  = None

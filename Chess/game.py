@@ -354,13 +354,13 @@ class Graphics:
     def _btn_layout(self):
         """Returns (button_width, button_height, padding) for the 3-button bar."""
         pad = 8
-        bw = (self.screen_w - pad * 4) // 3
+        bw = (self.window_size - pad * 4) // 3
         bh = self.button_bar_height - pad * 2
         return bw, bh, pad
 
     def _bar_y(self):
-        """Y coordinate where the button bar begins (always at screen bottom)."""
-        return self.screen_h - self.button_bar_height
+        """Y coordinate where the button bar begins — directly below the board."""
+        return self.window_size
 
     @property
     def save_btn_rect(self):
@@ -380,13 +380,13 @@ class Graphics:
     def draw_button_bar(self, mouse_px, save_exists, show_hints=True):
         """Draw the Save / Load / Hints button strip below the board — pixel art style."""
         bar_y = self._bar_y()
-        bar_rect = pygame.Rect(0, bar_y, self.screen_w, self.button_bar_height)
+        bar_rect = pygame.Rect(0, bar_y, self.window_size, self.button_bar_height)
         pygame.draw.rect(self.screen, (8, 8, 18), bar_rect)
         # Pixel art divider: bright top line + dark second line
         pygame.draw.line(self.screen, (60, 50, 100),
-                         (0, bar_y), (self.screen_w, bar_y), 2)
+                         (0, bar_y), (self.window_size, bar_y), 2)
         pygame.draw.line(self.screen, (20, 15, 40),
-                         (0, bar_y + 2), (self.screen_w, bar_y + 2), 1)
+                         (0, bar_y + 2), (self.window_size, bar_y + 2), 1)
 
         BEVEL = 2
 

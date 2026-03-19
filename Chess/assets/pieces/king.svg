@@ -14,15 +14,21 @@
   <rect x="32" y="16" width="8"  height="8" fill="{fill_hi}"/>
   <rect x="40" y="16" width="8"  height="8" fill="{fill_lo}"/>
   <rect x="48" y="16" width="8"  height="8" fill="{stroke}"/>
-  <!-- Row 3: full-width horizontal top outline -->
-  <rect x="0"  y="24" width="80" height="8" fill="{stroke}"/>
+  <!-- Row 3: horizontal top edge — interior cols 4-5 stay filled so cross reads as one shape -->
+  <rect x="0"  y="24" width="32" height="8" fill="{stroke}"/>
+  <rect x="32" y="24" width="8"  height="8" fill="{fill_hi}"/>
+  <rect x="40" y="24" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="48" y="24" width="32" height="8" fill="{stroke}"/>
   <!-- Row 4: horizontal bar interior -->
   <rect x="0"  y="32" width="8"  height="8" fill="{stroke}"/>
   <rect x="8"  y="32" width="32" height="8" fill="{fill_hi}"/>
   <rect x="40" y="32" width="32" height="8" fill="{fill_lo}"/>
   <rect x="72" y="32" width="8"  height="8" fill="{stroke}"/>
-  <!-- Row 5: full-width horizontal bottom outline -->
-  <rect x="0"  y="40" width="80" height="8" fill="{stroke}"/>
+  <!-- Row 5: horizontal bottom edge — interior cols 4-5 stay filled -->
+  <rect x="0"  y="40" width="32" height="8" fill="{stroke}"/>
+  <rect x="32" y="40" width="8"  height="8" fill="{fill_hi}"/>
+  <rect x="40" y="40" width="8"  height="8" fill="{fill_lo}"/>
+  <rect x="48" y="40" width="32" height="8" fill="{stroke}"/>
   <!-- Row 6: vertical shaft -->
   <rect x="24" y="48" width="8"  height="8" fill="{stroke}"/>
   <rect x="32" y="48" width="8"  height="8" fill="{fill_hi}"/>

@@ -696,31 +696,31 @@ PIECE_THEMES = {
         'white': {'fill': '#EAD9B0', 'fill_hi': '#F8EFD0', 'fill_lo': '#B89660',
                   'stroke': '#2A1808', 'accent': '#D4A020'},
         'black': {'fill': '#1C1630', 'fill_hi': '#342C50', 'fill_lo': '#0C0818',
-                  'stroke': '#4A3870', 'accent': '#6040A8'},
+                  'stroke': '#2C2244', 'accent': '#6040A8'},
     },
     'Arctic':   {
         'white': {'fill': '#D8EEF8', 'fill_hi': '#F0F8FF', 'fill_lo': '#90BCD8',
                   'stroke': '#102840', 'accent': '#40C0E0'},
         'black': {'fill': '#102848', 'fill_hi': '#203860', 'fill_lo': '#081428',
-                  'stroke': '#8BBCE0', 'accent': '#2070C0'},
+                  'stroke': '#1E3A62', 'accent': '#2070C0'},
     },
     'Forest':   {
         'white': {'fill': '#C8D8A0', 'fill_hi': '#E0ECC0', 'fill_lo': '#88A860',
                   'stroke': '#182808', 'accent': '#80C040'},
         'black': {'fill': '#183018', 'fill_hi': '#284828', 'fill_lo': '#0C1808',
-                  'stroke': '#80B040', 'accent': '#406020'},
+                  'stroke': '#223C1C', 'accent': '#406020'},
     },
     'Obsidian': {
         'white': {'fill': '#D0C8C0', 'fill_hi': '#F0E8E0', 'fill_lo': '#908880',
                   'stroke': '#181410', 'accent': '#C8A020'},
         'black': {'fill': '#201C18', 'fill_hi': '#382F28', 'fill_lo': '#100C08',
-                  'stroke': '#786058', 'accent': '#806030'},
+                  'stroke': '#2E2620', 'accent': '#806030'},
     },
     'Candy':    {
         'white': {'fill': '#FFD0E0', 'fill_hi': '#FFF0F5', 'fill_lo': '#E090B0',
                   'stroke': '#481028', 'accent': '#FF40A0'},
         'black': {'fill': '#480820', 'fill_hi': '#781038', 'fill_lo': '#280410',
-                  'stroke': '#E050A0', 'accent': '#C02060'},
+                  'stroke': '#641228', 'accent': '#C02060'},
     },
 }
 

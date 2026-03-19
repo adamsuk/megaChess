@@ -237,7 +237,9 @@ class Graphics:
         self.highlights = False
         self.show_hints = True   # toggle: show piece selection + legal-move highlighting
 
-        self.frame_size = 24     # pixel border around board for coordinate labels
+        self.frame_size = 28     # pixel border around board for coordinate labels
+        self.board_theme = 'Classic'
+        self.piece_theme = 'Classic'
 
     # Hex colours used to colorize SVG templates for each side (pixel art tonal palette)
     ICON_COLOURS = {
@@ -275,7 +277,7 @@ class Graphics:
                 template = open(path).read()
             except (FileNotFoundError, OSError):
                 continue
-            for color_name, colours in self.ICON_COLOURS.items():
+            for color_name, colours in PIECE_THEMES[self.piece_theme].items():
                 try:
                     svg = (template
                            .replace('{fill}',    colours['fill'])
@@ -373,30 +375,47 @@ class Graphics:
             self.screen.blit(text_s,   text_s.get_rect(center=rect.center))
 
     def draw_board_frame(self):
-        """Draw the dark surround + teal border + coordinate labels (a-h / 1-n)."""
+        """Draw dark surround + pixel-art teal border + coordinate labels (a-h / 1-n).
+        Labels use freesansbold with drop shadow for a retro pixel art look."""
         f  = self.frame_size
         sq = self.square_size
         n  = self.board_size
         board_px = sq * n
         # Dark background behind the frame area
         pygame.draw.rect(self.screen, (8, 8, 18), (0, 0, self.window_size, self.window_size))
-        # Teal outer border + dark inner border around the board
-        pygame.draw.rect(self.screen, Colours.HIGH,   (f - 4, f - 4, board_px + 8, board_px + 8), 2)
-        pygame.draw.rect(self.screen, (30, 25, 55), (f - 2, f - 2, board_px + 4, board_px + 4), 2)
-        # File labels (a–z) top and bottom
-        lbl_font = pygame.font.SysFont(None, max(f - 4, 12))
+
+        # Pixel art double-border: bright teal outer (3px) + dark inner (2px)
+        pygame.draw.rect(self.screen, Colours.HIGH, (f - 5, f - 5, board_px + 10, board_px + 10), 3)
+        pygame.draw.rect(self.screen, (30, 25, 55), (f - 2, f - 2, board_px +  4, board_px +  4), 2)
+
+        # Corner pixel accent squares in each corner of the frame
+        for cx_off, cy_off in [(0, 0), (board_px + 4, 0),
+                                (0, board_px + 4), (board_px + 4, board_px + 4)]:
+            pygame.draw.rect(self.screen, Colours.HIGH,
+                             (f - 5 + cx_off, f - 5 + cy_off, 6, 6))
+
+        # Coordinate labels — freesansbold with 1px drop shadow for pixel art look
+        fsize = max(f - 10, 9)
+        lbl_font = pygame.font.Font('freesansbold.ttf', fsize)
+        shadow_col = (0, 0, 0)
         files = 'abcdefghijklmnopqrstuvwxyz'[:n]
         for i, ch in enumerate(files):
             cx = f + i * sq + sq // 2
-            lbl = lbl_font.render(ch, True, Colours.GOLD)
-            self.screen.blit(lbl, lbl.get_rect(centerx=cx, centery=f // 2))
-            self.screen.blit(lbl, lbl.get_rect(centerx=cx, centery=f + board_px + f // 2))
-        # Rank labels (1–n) left and right
+            shadow = lbl_font.render(ch, True, shadow_col)
+            lbl    = lbl_font.render(ch, True, Colours.GOLD)
+            for centery in (f // 2, f + board_px + f // 2):
+                r = lbl.get_rect(centerx=cx, centery=centery)
+                self.screen.blit(shadow, r.move(1, 1))
+                self.screen.blit(lbl, r)
         for i in range(n):
             cy = f + i * sq + sq // 2
-            lbl = lbl_font.render(str(n - i), True, Colours.GOLD)
-            self.screen.blit(lbl, lbl.get_rect(centerx=f // 2, centery=cy))
-            self.screen.blit(lbl, lbl.get_rect(centerx=f + board_px + f // 2, centery=cy))
+            ch = str(n - i)
+            shadow = lbl_font.render(ch, True, shadow_col)
+            lbl    = lbl_font.render(ch, True, Colours.GOLD)
+            for centerx in (f // 2, f + board_px + f // 2):
+                r = lbl.get_rect(centerx=centerx, centery=cy)
+                self.screen.blit(shadow, r.move(1, 1))
+                self.screen.blit(lbl, r)
 
     def update_display(self, board, legal_moves, selected_piece, mouse_pos, click,
                        mouse_px=(0, 0), save_exists=False):
@@ -439,38 +458,45 @@ class Graphics:
         Each square gets a pixel art bevel: bright highlight on top/left edges,
         dark shadow on bottom/right edges, giving a raised-tile 3D effect.
         Hole squares are drawn sunken (inverted bevel).
+        Board theme colours are read from BOARD_THEMES[self.board_theme].
         """
         sq = self.square_size
         bevel = max(2, sq // 16)
-        LIGHT_HI = (240, 210, 150)
-        LIGHT_LO = (168, 132,  72)
-        DARK_HI  = (128,  78,  42)
-        DARK_LO  = ( 52,  22,   4)
-        HOLE_BG  = ( 35,  35,  55)
-        HOLE_SHD = ( 20,  20,  35)
-        HOLE_HI  = ( 55,  55,  80)
+        t = BOARD_THEMES[self.board_theme]
 
         for x in xrange(self.board_size):
             for y in xrange(self.board_size):
                 sq_obj = board.matrix[int(x)][int(y)]
                 rx, ry = x * sq + self.frame_size, y * sq + self.frame_size
                 if sq_obj.is_hole:
-                    pygame.draw.rect(self.screen, HOLE_BG,  (rx, ry, sq, sq))
+                    pygame.draw.rect(self.screen, t['hole'],    (rx, ry, sq, sq))
                     # Sunken bevel: dark top/left, bright bottom/right
-                    pygame.draw.rect(self.screen, HOLE_SHD, (rx, ry, sq, bevel))
-                    pygame.draw.rect(self.screen, HOLE_SHD, (rx, ry, bevel, sq))
-                    pygame.draw.rect(self.screen, HOLE_HI,  (rx, ry + sq - bevel, sq, bevel))
-                    pygame.draw.rect(self.screen, HOLE_HI,  (rx + sq - bevel, ry, bevel, sq))
+                    pygame.draw.rect(self.screen, t['hole_lo'], (rx, ry, sq, bevel))
+                    pygame.draw.rect(self.screen, t['hole_lo'], (rx, ry, bevel, sq))
+                    pygame.draw.rect(self.screen, t['hole_hi'], (rx, ry + sq - bevel, sq, bevel))
+                    pygame.draw.rect(self.screen, t['hole_hi'], (rx + sq - bevel, ry, bevel, sq))
                     continue
-                pygame.draw.rect(self.screen, sq_obj.color, (rx, ry, sq, sq))
                 is_light = sq_obj.color == Colours.CREAM
-                hi = LIGHT_HI if is_light else DARK_HI
-                lo = LIGHT_LO if is_light else DARK_LO
+                base_col = t['light'] if is_light else t['dark']
+                hi       = t['light_hi'] if is_light else t['dark_hi']
+                lo       = t['light_lo'] if is_light else t['dark_lo']
+                pygame.draw.rect(self.screen, base_col, (rx, ry, sq, sq))
                 # Raised bevel: bright top/left, dark bottom/right
                 pygame.draw.rect(self.screen, hi, (rx, ry, sq, bevel))
                 pygame.draw.rect(self.screen, hi, (rx, ry, bevel, sq))
                 pygame.draw.rect(self.screen, lo, (rx, ry + sq - bevel, sq, bevel))
                 pygame.draw.rect(self.screen, lo, (rx + sq - bevel, ry, bevel, sq))
+
+        # Pixel art grid lines — thin 1-px dark separators between tiles
+        grid_col = (0, 0, 0, 80)  # semi-transparent; draw as opaque approximation
+        sep = (8, 8, 18)
+        f = self.frame_size
+        board_px = sq * self.board_size
+        for i in range(1, self.board_size):
+            pygame.draw.line(self.screen, sep,
+                             (f + i * sq, f), (f + i * sq, f + board_px))
+            pygame.draw.line(self.screen, sep,
+                             (f, f + i * sq), (f + board_px, f + i * sq))
 
     def draw_board_pieces(self, board):
         """
@@ -633,6 +659,64 @@ class Graphics:
 _CUSTOM_PIECES_PATH = os.path.join(os.path.dirname(__file__), 'defs', 'custom_pieces.json')
 _DEFAULT_PIECES_PATH = os.path.join(os.path.dirname(__file__), 'defs', 'pieces_defs.json')
 _CUSTOM_LAYOUT_PATH = os.path.join(os.path.dirname(__file__), 'defs', 'custom_layout.json')
+_CUSTOM_THEME_PATH  = os.path.join(os.path.dirname(__file__), 'defs', 'custom_theme.json')
+
+# ── Board and piece colour theme presets ─────────────────────────────────────
+BOARD_THEMES = {
+    'Classic':  {'light': (210, 175, 110), 'dark':  ( 95,  55,  25),
+                 'light_hi': (240, 210, 150), 'light_lo': (168, 132,  72),
+                 'dark_hi':  (128,  78,  42), 'dark_lo':  ( 52,  22,   4),
+                 'hole': (35, 35, 55), 'hole_hi': (55, 55, 80), 'hole_lo': (20, 20, 35)},
+    'Arctic':   {'light': (200, 220, 240), 'dark':  ( 60,  90, 140),
+                 'light_hi': (230, 245, 255), 'light_lo': (150, 180, 210),
+                 'dark_hi':  ( 90, 130, 180), 'dark_lo':  ( 30,  55, 100),
+                 'hole': (20, 30, 55), 'hole_hi': (40, 55, 80), 'hole_lo': (10, 15, 35)},
+    'Forest':   {'light': (170, 200, 140), 'dark':  ( 50, 100,  50),
+                 'light_hi': (210, 235, 175), 'light_lo': (120, 160, 100),
+                 'dark_hi':  ( 80, 140,  80), 'dark_lo':  ( 25,  65,  25),
+                 'hole': (20, 35, 20), 'hole_hi': (40, 60, 40), 'hole_lo': (10, 18, 10)},
+    'Obsidian': {'light': (150, 140, 130), 'dark':  ( 40,  35,  30),
+                 'light_hi': (200, 190, 180), 'light_lo': (100,  95,  85),
+                 'dark_hi':  ( 70,  60,  55), 'dark_lo':  ( 20,  15,  10),
+                 'hole': (25, 22, 20), 'hole_hi': (45, 40, 35), 'hole_lo': (12, 10,  8)},
+    'Candy':    {'light': (255, 200, 215), 'dark':  (160,  50, 100),
+                 'light_hi': (255, 230, 240), 'light_lo': (220, 155, 175),
+                 'dark_hi':  (210,  90, 140), 'dark_lo':  (100,  25,  65),
+                 'hole': (55, 20, 40), 'hole_hi': (80, 40, 65), 'hole_lo': (25,  8, 20)},
+}
+
+PIECE_THEMES = {
+    'Classic':  {
+        'white': {'fill': '#EAD9B0', 'fill_hi': '#F8EFD0', 'fill_lo': '#B89660',
+                  'stroke': '#2A1808', 'accent': '#D4A020'},
+        'black': {'fill': '#1C1630', 'fill_hi': '#342C50', 'fill_lo': '#0C0818',
+                  'stroke': '#9880C8', 'accent': '#6040A8'},
+    },
+    'Arctic':   {
+        'white': {'fill': '#D8EEF8', 'fill_hi': '#F0F8FF', 'fill_lo': '#90BCD8',
+                  'stroke': '#102840', 'accent': '#40C0E0'},
+        'black': {'fill': '#102848', 'fill_hi': '#203860', 'fill_lo': '#081428',
+                  'stroke': '#8BBCE0', 'accent': '#2070C0'},
+    },
+    'Forest':   {
+        'white': {'fill': '#C8D8A0', 'fill_hi': '#E0ECC0', 'fill_lo': '#88A860',
+                  'stroke': '#182808', 'accent': '#80C040'},
+        'black': {'fill': '#183018', 'fill_hi': '#284828', 'fill_lo': '#0C1808',
+                  'stroke': '#80B040', 'accent': '#406020'},
+    },
+    'Obsidian': {
+        'white': {'fill': '#D0C8C0', 'fill_hi': '#F0E8E0', 'fill_lo': '#908880',
+                  'stroke': '#181410', 'accent': '#C8A020'},
+        'black': {'fill': '#201C18', 'fill_hi': '#382F28', 'fill_lo': '#100C08',
+                  'stroke': '#786058', 'accent': '#806030'},
+    },
+    'Candy':    {
+        'white': {'fill': '#FFD0E0', 'fill_hi': '#FFF0F5', 'fill_lo': '#E090B0',
+                  'stroke': '#481028', 'accent': '#FF40A0'},
+        'black': {'fill': '#480820', 'fill_hi': '#781038', 'fill_lo': '#280410',
+                  'stroke': '#E050A0', 'accent': '#C02060'},
+    },
+}
 
 # Boolean flags that can be toggled per move_rule
 _RULE_FLAGS = ['sliding', 'directional', 'move_only', 'capture_only', 'jump_capture']
@@ -956,33 +1040,57 @@ class PieceEditor:
     # Drawing
     # ------------------------------------------------------------------
 
+    def _draw_pixel_btn(self, surf, rect, base_color, hovered, text, font, text_color,
+                        bevel=2):
+        """Draw a pixel-art bevelled button (square corners)."""
+        bg = tuple(min(c + 30, 255) for c in base_color) if hovered else base_color
+        hi = tuple(min(c + 55, 255) for c in base_color)
+        lo = tuple(max(c - 25,   0) for c in base_color)
+        pygame.draw.rect(surf, bg, rect, border_radius=0)
+        pygame.draw.line(surf, hi, rect.topleft,    rect.topright,    bevel)
+        pygame.draw.line(surf, hi, rect.topleft,    rect.bottomleft,  bevel)
+        pygame.draw.line(surf, lo, rect.bottomleft, rect.bottomright, bevel)
+        pygame.draw.line(surf, lo, rect.topright,   rect.bottomright, bevel)
+        if text:
+            shd = font.render(text, True, (0, 0, 0))
+            lbl = font.render(text, True, text_color)
+            surf.blit(shd, shd.get_rect(center=(rect.centerx + 1, rect.centery + 1)))
+            surf.blit(lbl, lbl.get_rect(center=rect.center))
+
     def _draw(self, defs, selected, piece_names, left_w, right_x, right_w,
               btn_y, btn_h, mouse, scroll_y, status_msg):
         self.screen.fill(self.BG)
 
-        # Title
+        # Title with drop-shadow
+        shd = self.title_font.render('Piece Editor', True, (0, 0, 0))
         title = self.title_font.render('Piece Editor', True, self.TITLE_COLOR)
-        self.screen.blit(title, (self.PADDING, self.PADDING - 4))
+        self.screen.blit(shd,   (self.PADDING + 2, self.PADDING - 2))
+        self.screen.blit(title, (self.PADDING,      self.PADDING - 4))
 
         hint = self.tiny_font.render('Esc or ← Back = return to main menu', True, self.DIM_TEXT)
         self.screen.blit(hint, (self.w - hint.get_width() - self.PADDING, self.PADDING))
 
-        # Left panel background
-        pygame.draw.rect(self.screen, self.PANEL_BG,
-                         (0, 50, left_w, btn_y - 50), border_radius=4)
+        # Left panel — pixel art frame (square corners, teal outer + dark inner)
+        left_panel = pygame.Rect(0, 50, left_w, btn_y - 50)
+        pygame.draw.rect(self.screen, self.PANEL_BG, left_panel, border_radius=0)
+        pygame.draw.rect(self.screen, Colours.HIGH,  left_panel, 2)
+        pygame.draw.rect(self.screen, (30, 25, 55),  left_panel.inflate(-4, -4), 1)
 
         for name, rect in zip(piece_names, self._piece_rects(piece_names, left_w)):
             is_sel = (name == selected)
-            bg = self.SEL_BG if is_sel else (self.BTN_HOV if rect.collidepoint(*mouse) else self.BTN_BG)
-            pygame.draw.rect(self.screen, bg, rect, border_radius=6)
-            tc = self.SEL_TEXT if is_sel else self.TEXT
-            label = self.label_font.render(name, True, tc)
-            self.screen.blit(label, label.get_rect(centery=rect.centery, left=rect.left + 8))
+            hov    = rect.collidepoint(*mouse)
+            base   = self.SEL_BG if is_sel else (self.BTN_HOV if hov else self.BTN_BG)
+            tc     = self.SEL_TEXT if is_sel else self.TEXT
+            self._draw_pixel_btn(self.screen, rect, base, False, name, self.label_font, tc)
+            if is_sel:
+                pygame.draw.rect(self.screen, Colours.HIGH, rect, 2)
 
-        # Right panel
-        pygame.draw.rect(self.screen, self.PANEL_BG,
-                         (right_x - self.PADDING, 50, right_w + self.PADDING, btn_y - 50),
-                         border_radius=4)
+        # Right panel — pixel art frame
+        right_panel = pygame.Rect(right_x - self.PADDING, 50,
+                                  right_w + self.PADDING, btn_y - 50)
+        pygame.draw.rect(self.screen, self.PANEL_BG, right_panel, border_radius=0)
+        pygame.draw.rect(self.screen, Colours.HIGH,  right_panel, 2)
+        pygame.draw.rect(self.screen, (30, 25, 55),  right_panel.inflate(-4, -4), 1)
 
         clip = pygame.Rect(right_x - self.PADDING, 55, right_w + self.PADDING, btn_y - 60)
         self.screen.set_clip(clip)
@@ -1005,10 +1113,8 @@ class PieceEditor:
 
                 rm_rect = self._remove_rule_rect(y, right_x, right_w)
                 rm_hov  = rm_rect.collidepoint(*mouse)
-                rm_bg   = (180, 65, 65) if rm_hov else (110, 45, 45)
-                pygame.draw.rect(self.screen, rm_bg, rm_rect, border_radius=3)
-                rm_lbl = self.tiny_font.render('×', True, (240, 200, 200))
-                self.screen.blit(rm_lbl, rm_lbl.get_rect(center=rm_rect.center))
+                self._draw_pixel_btn(self.screen, rm_rect, (110, 45, 45), rm_hov,
+                                     '×', self.tiny_font, (240, 200, 200))
 
                 # ── Delta grid ────────────────────────────────────────────
                 active_deltas = {tuple(d) for d in rule.get('deltas', [])
@@ -1024,13 +1130,18 @@ class PieceEditor:
                     is_hov    = rect.collidepoint(*mouse)
                     if is_hov:
                         hovered_delta = (dx, dy)
-                    bg = self.ON_COLOR if is_active else self.OFF_COLOR
+                    base_c = self.ON_COLOR if is_active else self.OFF_COLOR
+                    # Pixel art bevel on each grid cell (square)
+                    bg  = tuple(min(c + 40, 255) for c in base_c) if is_hov else base_c
+                    hi  = tuple(min(c + 55, 255) for c in base_c)
+                    lo  = tuple(max(c - 25,   0) for c in base_c)
+                    pygame.draw.rect(self.screen, bg, rect, border_radius=0)
+                    pygame.draw.line(self.screen, hi, rect.topleft,    rect.topright,    1)
+                    pygame.draw.line(self.screen, hi, rect.topleft,    rect.bottomleft,  1)
+                    pygame.draw.line(self.screen, lo, rect.bottomleft, rect.bottomright, 1)
+                    pygame.draw.line(self.screen, lo, rect.topright,   rect.bottomright, 1)
                     if is_hov:
-                        bg = tuple(min(c + 40, 255) for c in bg)
-                    pygame.draw.rect(self.screen, bg, rect, border_radius=2)
-                    if is_hov:
-                        pygame.draw.rect(self.screen, (220, 225, 235),
-                                         rect, width=1, border_radius=2)
+                        pygame.draw.rect(self.screen, (220, 225, 235), rect, width=1)
 
                 # ── Flag toggles (below the grid) ────────────────────────
                 toggle_rects = self._rule_toggle_rects(rule, y, right_x, right_w)
@@ -1039,26 +1150,18 @@ class PieceEditor:
                     is_hov = rect.collidepoint(*mouse)
                     if is_hov:
                         hovered_flag = flag
-                    bg = self.ON_COLOR if val else self.OFF_COLOR
-                    if is_hov:
-                        bg = tuple(min(c + 30, 255) for c in bg)
-                    pygame.draw.rect(self.screen, bg, rect, border_radius=4)
-                    if is_hov:
-                        pygame.draw.rect(self.screen, (220, 225, 235),
-                                         rect, width=1, border_radius=4)
-                    ft = self.tiny_font.render(flag, True,
-                                              (10, 10, 10) if val else (160, 165, 175))
-                    self.screen.blit(ft, ft.get_rect(center=rect.center))
+                    base_c = self.ON_COLOR if val else self.OFF_COLOR
+                    tc_flag = (10, 10, 10) if val else (160, 165, 175)
+                    self._draw_pixel_btn(self.screen, rect, base_c, is_hov,
+                                        flag, self.tiny_font, tc_flag)
 
                 y += self.RULE_H
 
             # ── Add Rule button ───────────────────────────────────────────
             add_rect = self._add_rule_rect(piece_def, right_x, scroll_y)
             add_hov  = add_rect.collidepoint(*mouse)
-            add_bg   = (60, 105, 140) if add_hov else (45, 78, 105)
-            pygame.draw.rect(self.screen, add_bg, add_rect, border_radius=4)
-            add_lbl = self.small_font.render('+ Add Rule', True, self.TEXT)
-            self.screen.blit(add_lbl, add_lbl.get_rect(center=add_rect.center))
+            self._draw_pixel_btn(self.screen, add_rect, (45, 78, 105), add_hov,
+                                 '+ Add Rule', self.small_font, self.TEXT)
 
         self.screen.set_clip(None)
 
@@ -1075,25 +1178,22 @@ class PieceEditor:
             tx = max(right_x, min(mouse[0], self.w - tip_bg.width - 4))
             ty = min(mouse[1] + 18, btn_y - tip_bg.height - 4)
             tip_bg.topleft = (tx, ty)
-            pygame.draw.rect(self.screen, (40, 45, 62), tip_bg, border_radius=4)
-            pygame.draw.rect(self.screen, (90, 100, 130), tip_bg, width=1, border_radius=4)
+            pygame.draw.rect(self.screen, (40, 45, 62), tip_bg, border_radius=0)
+            pygame.draw.rect(self.screen, Colours.HIGH, tip_bg, width=1)
             self.screen.blit(tip_surf, (tx + 6, ty + 4))
 
-        # Buttons
+        # Buttons — pixel art bevel
         btn_colors = {
             '← Back': (70, 55, 70),
-            'Clone': self.BTN_BG,
-            'Reset': self.BTN_RESET,
-            'Save':  self.BTN_SAVE,
-            'Play':  self.BTN_PLAY,
+            'Clone':  self.BTN_BG,
+            'Reset':  self.BTN_RESET,
+            'Save':   self.BTN_SAVE,
+            'Play':   self.BTN_PLAY,
         }
         for label, rect in self._button_rects(btn_y, btn_h).items():
             hov = rect.collidepoint(*mouse)
-            base = btn_colors[label]
-            bg = tuple(min(c + 25, 255) for c in base) if hov else base
-            pygame.draw.rect(self.screen, bg, rect, border_radius=8)
-            txt = self.label_font.render(label, True, self.TEXT)
-            self.screen.blit(txt, txt.get_rect(center=rect.center))
+            self._draw_pixel_btn(self.screen, rect, btn_colors[label], hov,
+                                 label, self.label_font, self.TEXT)
 
         # Status message
         if status_msg:
@@ -1134,7 +1234,7 @@ class BoardLayoutEditor:
     # Piece types in palette order
     PALETTE_PIECES = ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn']
 
-    def __init__(self):
+    def __init__(self, board_theme='Classic', piece_theme='Classic'):
         pygame.init()
         info = pygame.display.Info()
         self.w = min(info.current_w, info.current_h)
@@ -1146,17 +1246,19 @@ class BoardLayoutEditor:
         self.small_font = pygame.font.Font('freesansbold.ttf', 14)
         self.tiny_font  = pygame.font.Font('freesansbold.ttf', 12)
 
+        self.board_theme = board_theme if board_theme in BOARD_THEMES else 'Classic'
+        self.piece_theme = piece_theme if piece_theme in PIECE_THEMES else 'Classic'
+
         # Piece icon rendering (for palette + board preview)
-        pieces_defs = AllPieces().pieces_defs
-        sq = self._board_sq_size(8)  # icons always cached at standard 8×8 size
+        self._pieces_defs = AllPieces().pieces_defs
         self.piece_icons = {}
-        icon_colours = {
-            'white': {'fill': '#EAD9B0', 'fill_hi': '#F8EFD0', 'fill_lo': '#B89660',
-                      'stroke': '#2A1808', 'accent': '#D4A020'},
-            'black': {'fill': '#1C1630', 'fill_hi': '#342C50', 'fill_lo': '#0C0818',
-                      'stroke': '#9880C8', 'accent': '#6040A8'},
-        }
-        for piece_type, defn in pieces_defs.items():
+        self._reload_icons()
+
+    def _reload_icons(self):
+        """Re-render piece icons using the current piece theme."""
+        sq = self._board_sq_size(8)
+        self.piece_icons = {}
+        for piece_type, defn in self._pieces_defs.items():
             path = defn.get('icon')
             if not path:
                 continue
@@ -1164,7 +1266,7 @@ class BoardLayoutEditor:
                 template = open(path).read()
             except (FileNotFoundError, OSError):
                 continue
-            for color_name, colours in icon_colours.items():
+            for color_name, colours in PIECE_THEMES[self.piece_theme].items():
                 try:
                     svg = (template
                            .replace('{fill}',    colours['fill'])
@@ -1274,7 +1376,7 @@ class BoardLayoutEditor:
                     sys.exit()
 
                 if event.type == locals.KEYDOWN and event.key == locals.K_ESCAPE:
-                    return layout, saved_path
+                    return layout, saved_path, self.board_theme, self.piece_theme
 
                 if event.type == locals.MOUSEBUTTONDOWN:
                     mx, my = event.pos
@@ -1328,11 +1430,29 @@ class BoardLayoutEditor:
                             status_msg = f'Loaded preset: {preset_name}'
                             status_until = pygame.time.get_ticks() + 2500
 
+                    # Theme selector clicks
+                    pal_items = self._palette_rects(board_size)
+                    theme_start_y = pal_items[-1][2].bottom + 10 if pal_items else 44 + 10
+                    px_th = self._panel_x(board_size)
+                    pw_th = self.w - px_th - self.PADDING
+                    for (kind, name), rect in self._theme_rects(px_th, pw_th, theme_start_y).items():
+                        if rect.collidepoint(mx, my):
+                            if kind == 'board':
+                                self.board_theme = name
+                            else:
+                                self.piece_theme = name
+                                self._reload_icons()
+                            # Auto-save theme choice
+                            os.makedirs(os.path.dirname(_CUSTOM_THEME_PATH), exist_ok=True)
+                            with open(_CUSTOM_THEME_PATH, 'w') as _tf:
+                                json.dump({'board_theme': self.board_theme,
+                                           'piece_theme': self.piece_theme}, _tf)
+
                     # Button clicks
                     for label, rect in self._button_rects(btn_y, btn_h, board_size).items():
                         if rect.collidepoint(mx, my):
                             if label == '← Back':
-                                return layout, saved_path
+                                return layout, saved_path, self.board_theme, self.piece_theme
                             elif label == 'Reset':
                                 layout = self._default_layout()
                                 saved_path = None
@@ -1344,7 +1464,7 @@ class BoardLayoutEditor:
                                 status_msg = 'Saved to defs/custom_layout.json'
                                 status_until = pygame.time.get_ticks() + 2500
                             elif label == 'Play':
-                                return layout, saved_path
+                                return layout, saved_path, self.board_theme, self.piece_theme
 
             self._draw(layout, selected, mouse, btn_y, btn_h,
                        status_msg if pygame.time.get_ticks() < status_until else '')
@@ -1445,53 +1565,114 @@ class BoardLayoutEditor:
     # Drawing
     # ------------------------------------------------------------------
 
+    def _draw_pixel_btn(self, surf, rect, base_color, hovered, text, font, text_color,
+                        bevel=2):
+        """Draw a pixel-art bevelled button (square corners, bright top/left, dark bottom/right)."""
+        bg = tuple(min(c + 30, 255) for c in base_color) if hovered else base_color
+        hi = tuple(min(c + 55, 255) for c in base_color)
+        lo = tuple(max(c - 25,   0) for c in base_color)
+        pygame.draw.rect(surf, bg, rect, border_radius=0)
+        pygame.draw.line(surf, hi, rect.topleft,    rect.topright,    bevel)
+        pygame.draw.line(surf, hi, rect.topleft,    rect.bottomleft,  bevel)
+        pygame.draw.line(surf, lo, rect.bottomleft, rect.bottomright, bevel)
+        pygame.draw.line(surf, lo, rect.topright,   rect.bottomright, bevel)
+        if text:
+            shd = font.render(text, True, (0, 0, 0))
+            lbl = font.render(text, True, text_color)
+            surf.blit(shd, shd.get_rect(center=(rect.centerx + 1, rect.centery + 1)))
+            surf.blit(lbl, lbl.get_rect(center=rect.center))
+
+    def _theme_rects(self, panel_x, panel_w, start_y):
+        """Return dict of (kind, name) → pygame.Rect for theme selector buttons."""
+        bw, bh, gap = 64, 22, 4
+        rects = {}
+        # Board theme row
+        y = start_y + 20
+        for i, name in enumerate(BOARD_THEMES):
+            x = panel_x + i * (bw + gap)
+            rects[('board', name)] = pygame.Rect(x, y, bw, bh)
+        # Piece theme row
+        y += bh + gap + 20
+        for i, name in enumerate(PIECE_THEMES):
+            x = panel_x + i * (bw + gap)
+            rects[('piece', name)] = pygame.Rect(x, y, bw, bh)
+        return rects
+
     def _draw(self, layout, selected, mouse, btn_y, btn_h, status_msg):
         board_size = layout.get('board_size', 8)
         self.screen.fill(self.BG)
 
-        # Title
+        # Title with drop-shadow
+        shd = self.title_font.render('Board Layout Editor', True, (0, 0, 0))
         title = self.title_font.render('Board Layout Editor', True, self.TITLE_COLOR)
-        self.screen.blit(title, (self.PADDING, 8))
+        self.screen.blit(shd,   (self.PADDING + 2, 10))
+        self.screen.blit(title, (self.PADDING,      8))
         hint = self.tiny_font.render('Left-click: place  •  Right-click: clear  •  Esc: back',
                                      True, self.DIM_TEXT)
         self.screen.blit(hint, (self._panel_x(board_size), 8))
 
         sq = self._board_sq_size(board_size)
         ox, oy = self._board_origin()
+        t = BOARD_THEMES[self.board_theme]
 
-        # Board squares with pixel art bevel
+        # Pixel art frame around board: teal outer + dark inner + corner accents
+        board_px = sq * board_size
+        pygame.draw.rect(self.screen, Colours.HIGH,  (ox - 5, oy - 5, board_px + 10, board_px + 10), 3)
+        pygame.draw.rect(self.screen, (30, 25, 55),  (ox - 2, oy - 2, board_px +  4, board_px +  4), 2)
+        for cx_off, cy_off in [(0,0),(board_px+4,0),(0,board_px+4),(board_px+4,board_px+4)]:
+            pygame.draw.rect(self.screen, Colours.HIGH, (ox - 5 + cx_off, oy - 5 + cy_off, 6, 6))
+
+        # Coordinate labels around the board (pixel art style with drop shadow)
+        lbl_font = pygame.font.Font('freesansbold.ttf', max(sq // 4, 10))
+        files = 'abcdefghijklmnopqrstuvwxyz'[:board_size]
+        for i, ch in enumerate(files):
+            cx = ox + i * sq + sq // 2
+            shd_s = lbl_font.render(ch, True, (0, 0, 0))
+            lbl_s = lbl_font.render(ch, True, Colours.GOLD)
+            r = lbl_s.get_rect(centerx=cx, centery=oy - 12)
+            self.screen.blit(shd_s, r.move(1, 1))
+            self.screen.blit(lbl_s, r)
+        for i in range(board_size):
+            cy = oy + i * sq + sq // 2
+            ch = str(board_size - i)
+            shd_s = lbl_font.render(ch, True, (0, 0, 0))
+            lbl_s = lbl_font.render(ch, True, Colours.GOLD)
+            r = lbl_s.get_rect(centerx=ox - 12, centery=cy)
+            self.screen.blit(shd_s, r.move(1, 1))
+            self.screen.blit(lbl_s, r)
+
+        # Board squares with board-theme bevel
         _bevel = max(2, sq // 16)
-        _LIGHT_HI = (240, 210, 150)
-        _LIGHT_LO = (168, 132,  72)
-        _DARK_HI  = (128,  78,  42)
-        _DARK_LO  = ( 52,  22,   4)
-        _HOLE_BG  = ( 35,  35,  55)
-        _HOLE_SHD = ( 20,  20,  35)
-        _HOLE_HI  = ( 55,  55,  80)
+        sq_coord_hover = self._board_sq_from_pixel(*mouse, board_size)
         for x in range(board_size):
             for y in range(board_size):
                 cell = layout['matrix'][x][y]
                 rect = self._board_sq_rect(x, y, board_size)
-                sq_coord = self._board_sq_from_pixel(*mouse, board_size)
-                hovering = sq_coord == (x, y)
+                hovering = sq_coord_hover == (x, y)
                 if cell == 'hole':
-                    pygame.draw.rect(self.screen, _HOLE_BG, rect)
-                    pygame.draw.rect(self.screen, _HOLE_SHD, (rect.x, rect.y, rect.w, _bevel))
-                    pygame.draw.rect(self.screen, _HOLE_SHD, (rect.x, rect.y, _bevel, rect.h))
-                    pygame.draw.rect(self.screen, _HOLE_HI,  (rect.x, rect.y + rect.h - _bevel, rect.w, _bevel))
-                    pygame.draw.rect(self.screen, _HOLE_HI,  (rect.x + rect.w - _bevel, rect.y, _bevel, rect.h))
+                    pygame.draw.rect(self.screen, t['hole'], rect)
+                    pygame.draw.rect(self.screen, t['hole_lo'], (rect.x, rect.y, rect.w, _bevel))
+                    pygame.draw.rect(self.screen, t['hole_lo'], (rect.x, rect.y, _bevel, rect.h))
+                    pygame.draw.rect(self.screen, t['hole_hi'], (rect.x, rect.y + rect.h - _bevel, rect.w, _bevel))
+                    pygame.draw.rect(self.screen, t['hole_hi'], (rect.x + rect.w - _bevel, rect.y, _bevel, rect.h))
                 else:
-                    base_color = self.CREAM if (x + y) % 2 == 0 else self.BROWN
+                    is_light = (x + y) % 2 == 0
+                    base_color = t['light'] if is_light else t['dark']
                     if hovering:
                         base_color = tuple(min(c + 30, 255) for c in base_color)
+                    hi = t['light_hi'] if is_light else t['dark_hi']
+                    lo = t['light_lo'] if is_light else t['dark_lo']
                     pygame.draw.rect(self.screen, base_color, rect)
-                    is_light = (x + y) % 2 == 0
-                    hi = _LIGHT_HI if is_light else _DARK_HI
-                    lo = _LIGHT_LO if is_light else _DARK_LO
                     pygame.draw.rect(self.screen, hi, (rect.x, rect.y, rect.w, _bevel))
                     pygame.draw.rect(self.screen, hi, (rect.x, rect.y, _bevel, rect.h))
                     pygame.draw.rect(self.screen, lo, (rect.x, rect.y + rect.h - _bevel, rect.w, _bevel))
                     pygame.draw.rect(self.screen, lo, (rect.x + rect.w - _bevel, rect.y, _bevel, rect.h))
+
+        # Pixel art grid lines between squares
+        sep = (8, 8, 18)
+        for i in range(1, board_size):
+            pygame.draw.line(self.screen, sep, (ox + i*sq, oy), (ox + i*sq, oy + board_px))
+            pygame.draw.line(self.screen, sep, (ox, oy + i*sq), (ox + board_px, oy + i*sq))
 
         # Board pieces
         piece_labels = {'pawn': 'P', 'rook': 'R', 'knight': 'N',
@@ -1518,17 +1699,15 @@ class BoardLayoutEditor:
                                                  True, outline)
                     self.screen.blit(lbl, lbl.get_rect(center=(cx, cy)))
 
-        # Board border (pixel art teal accent)
-        pygame.draw.rect(self.screen, (60, 50, 100),
-                         pygame.Rect(ox, oy, sq * board_size, sq * board_size), 2)
-
-        # Right panel — palette
+        # Right panel — pixel art frame + palette + themes
         px = self._panel_x(board_size)
         pw = self.w - px - self.PADDING
-        pygame.draw.rect(self.screen, self.PANEL_BG,
-                         pygame.Rect(px - self.PADDING // 2, oy,
-                                     pw + self.PADDING, btn_y - oy - self.PADDING),
-                         border_radius=4)
+        panel_rect = pygame.Rect(px - self.PADDING // 2, oy - 2,
+                                 pw + self.PADDING, btn_y - oy + 2 - self.PADDING)
+        pygame.draw.rect(self.screen, self.PANEL_BG, panel_rect, border_radius=0)
+        pygame.draw.rect(self.screen, Colours.HIGH,  panel_rect, 2)
+        pygame.draw.rect(self.screen, (30, 25, 55),  panel_rect.inflate(-4, -4), 1)
+
         pal_hdr = self.label_font.render('Palette', True, self.TITLE_COLOR)
         self.screen.blit(pal_hdr, (px, oy + 6))
 
@@ -1542,11 +1721,10 @@ class BoardLayoutEditor:
             (plus_rect,  '+', board_size < self.MAX_BOARD_SIZE),
         ]:
             hov = rect.collidepoint(*mouse) and enabled
-            bg = self.BTN_HOV if hov else (self.BTN_BG if enabled else (45, 48, 58))
+            base = self.BTN_HOV if enabled else (45, 48, 58)
             tc = self.TEXT if enabled else (70, 75, 85)
-            pygame.draw.rect(self.screen, bg, rect, border_radius=4)
-            t = self.label_font.render(label, True, tc)
-            self.screen.blit(t, t.get_rect(center=rect.center))
+            self._draw_pixel_btn(self.screen, rect, base, hov,
+                                 label, self.label_font, tc)
 
         for color_str, piece_type, rect in self._palette_rects(board_size):
             is_hole_entry = (color_str == 'hole')
@@ -1562,18 +1740,18 @@ class BoardLayoutEditor:
             else:
                 bg = self.BTN_BG
                 tc = self.TEXT
-            pygame.draw.rect(self.screen, bg, rect, border_radius=5)
+            # Palette row: pixel art bevel + selected teal border
+            self._draw_pixel_btn(self.screen, rect, bg, False, None, None, None)
+            if is_sel:
+                pygame.draw.rect(self.screen, Colours.HIGH, rect, 2)
 
             icon_x = rect.left + 4
             if is_hole_entry:
-                # Draw a small grey swatch for the hole tool
                 swatch = pygame.Rect(icon_x, rect.centery - 10, 24, 20)
-                pygame.draw.rect(self.screen, Colours.HOLE, swatch, border_radius=2)
-                pygame.draw.rect(self.screen, (45, 45, 55),
-                                 swatch.inflate(-6, -6), border_radius=1)
+                pygame.draw.rect(self.screen, Colours.HOLE, swatch, border_radius=0)
+                pygame.draw.rect(self.screen, (45, 45, 55), swatch.inflate(-6, -6))
                 lbl = self.small_font.render('Hole  (toggle)', True, tc)
             else:
-                # Mini piece icon in the palette row
                 icon = self.piece_icons.get((piece_type, color_str))
                 if icon:
                     small = pygame.transform.smoothscale(icon, (24, 24))
@@ -1581,6 +1759,33 @@ class BoardLayoutEditor:
                 lbl_text = f"{color_str}  {piece_type}"
                 lbl = self.small_font.render(lbl_text, True, tc)
             self.screen.blit(lbl, lbl.get_rect(centery=rect.centery, left=icon_x + 28))
+
+        # ── Themes panel ─────────────────────────────────────────────────
+        # Positioned below palette items, above preset/action buttons
+        pal_items = self._palette_rects(board_size)
+        if pal_items:
+            theme_start_y = pal_items[-1][2].bottom + 10
+        else:
+            theme_start_y = oy + 10
+        theme_rects = self._theme_rects(px, pw, theme_start_y)
+
+        thdr = self.tiny_font.render('BOARD THEME', True, self.TITLE_COLOR)
+        self.screen.blit(thdr, (px, theme_start_y + 2))
+        phdr = self.tiny_font.render('PIECE THEME', True, self.TITLE_COLOR)
+        bh_row = list(BOARD_THEMES.keys())[0]
+        phdr_y = theme_rects[('board', bh_row)].bottom + 6
+        self.screen.blit(phdr, (px, phdr_y))
+
+        for (kind, name), rect in theme_rects.items():
+            active = (name == self.board_theme if kind == 'board'
+                      else name == self.piece_theme)
+            hov = rect.collidepoint(*mouse)
+            base = (40, 160, 160) if active else self.BTN_BG
+            tc   = (5, 5, 15) if active else self.TEXT
+            self._draw_pixel_btn(self.screen, rect, base, hov,
+                                 name, self.tiny_font, tc)
+            if active:
+                pygame.draw.rect(self.screen, Colours.HIGH, rect, 2)
 
         # Preset buttons (row above the action buttons)
         preset_rects = self._preset_rects(btn_y, btn_h, board_size)
@@ -1590,12 +1795,10 @@ class BoardLayoutEditor:
             self.screen.blit(preset_lbl, (ox, first_rect.y - 18))
         for name, rect in preset_rects.items():
             hov = rect.collidepoint(*mouse)
-            bg = self.BTN_HOV if hov else self.BTN_BG
-            pygame.draw.rect(self.screen, bg, rect, border_radius=0)
-            txt = self.tiny_font.render(name, True, self.TEXT)
-            self.screen.blit(txt, txt.get_rect(center=rect.center))
+            self._draw_pixel_btn(self.screen, rect, self.BTN_BG, hov,
+                                 name, self.tiny_font, self.TEXT)
 
-        # Bottom action buttons
+        # Bottom action buttons (pixel art bevel)
         btn_colors = {
             '← Back': self.BTN_BG,
             'Reset':   self.BTN_RST,
@@ -1604,11 +1807,8 @@ class BoardLayoutEditor:
         }
         for label, rect in self._button_rects(btn_y, btn_h, board_size).items():
             hov = rect.collidepoint(*mouse)
-            base = btn_colors[label]
-            bg = tuple(min(c + 25, 255) for c in base) if hov else base
-            pygame.draw.rect(self.screen, bg, rect, border_radius=0)
-            txt = self.label_font.render(label, True, self.TEXT)
-            self.screen.blit(txt, txt.get_rect(center=rect.center))
+            self._draw_pixel_btn(self.screen, rect, btn_colors[label], hov,
+                                 label, self.label_font, self.TEXT)
 
         # Status message
         if status_msg:
@@ -1748,6 +1948,30 @@ def _start_menu(screen, w, h):
     for sy in range(0, h, 2):
         pygame.draw.line(scanlines, (0, 0, 0, 80), (0, sy), (w, sy))
 
+    # Pre-build corner chess board decorations (4×4 grid of 14×14px squares)
+    _cell = 14
+    _t = BOARD_THEMES['Classic']
+    _corner_surf = pygame.Surface((_cell * 4, _cell * 4))
+    for _r in range(4):
+        for _c in range(4):
+            _col = _t['light'] if (_r + _c) % 2 == 0 else _t['dark']
+            pygame.draw.rect(_corner_surf, _col,
+                             (_c * _cell, _r * _cell, _cell, _cell))
+    # bevel each mini-square
+    _bv = 2
+    for _r in range(4):
+        for _c in range(4):
+            _is_l = (_r + _c) % 2 == 0
+            _hi = _t['light_hi'] if _is_l else _t['dark_hi']
+            _lo = _t['light_lo'] if _is_l else _t['dark_lo']
+            _rx, _ry = _c * _cell, _r * _cell
+            pygame.draw.rect(_corner_surf, _hi, (_rx, _ry, _cell, _bv))
+            pygame.draw.rect(_corner_surf, _hi, (_rx, _ry, _bv, _cell))
+            pygame.draw.rect(_corner_surf, _lo, (_rx, _ry + _cell - _bv, _cell, _bv))
+            pygame.draw.rect(_corner_surf, _lo, (_rx + _cell - _bv, _ry, _bv, _cell))
+    _corner_w = _cell * 4
+    pygame.draw.rect(_corner_surf, Colours.HIGH, (0, 0, _corner_w, _corner_w), 2)
+
     while True:
         mx, my = pygame.mouse.get_pos()
         for event in pygame.event.get():
@@ -1767,6 +1991,12 @@ def _start_menu(screen, w, h):
                     return 'edit_layout'
 
         screen.fill((10, 8, 20))
+        # Corner chess board decorations (pixel art motif)
+        margin = 16
+        screen.blit(_corner_surf, (margin, margin))
+        screen.blit(pygame.transform.flip(_corner_surf, True,  False), (w - _corner_w - margin, margin))
+        screen.blit(pygame.transform.flip(_corner_surf, False, True),  (margin, h - _corner_w - margin))
+        screen.blit(pygame.transform.flip(_corner_surf, True,  True),  (w - _corner_w - margin, h - _corner_w - margin))
         screen.blit(scanlines, (0, 0))
 
         # Stacked two-colour pixel art title: MEGA (gold) + CHESS (teal)
@@ -1830,14 +2060,31 @@ def main():
     screen = pygame.display.set_mode((w, h))
 
     custom_defs   = None
-    # Load previously saved custom layout, if any
     custom_layout = None
+    board_theme   = 'Classic'
+    piece_theme   = 'Classic'
+
+    # Load saved layout
     if os.path.exists(_CUSTOM_LAYOUT_PATH):
         try:
             with open(_CUSTOM_LAYOUT_PATH) as _f:
                 custom_layout = json.load(_f)
         except (OSError, json.JSONDecodeError):
             pass
+
+    # Load saved theme
+    if os.path.exists(_CUSTOM_THEME_PATH):
+        try:
+            _td = json.load(open(_CUSTOM_THEME_PATH))
+            board_theme = _td.get('board_theme', 'Classic')
+            piece_theme = _td.get('piece_theme', 'Classic')
+            if board_theme not in BOARD_THEMES:
+                board_theme = 'Classic'
+            if piece_theme not in PIECE_THEMES:
+                piece_theme = 'Classic'
+        except (OSError, json.JSONDecodeError):
+            pass
+
     while True:
         choice = _start_menu(screen, w, h)
         if choice == 'edit_pieces':
@@ -1845,16 +2092,20 @@ def main():
             if saved_path:
                 custom_defs = defs
         elif choice == 'edit_layout':
-            layout, saved_path = BoardLayoutEditor().run()
+            layout, saved_path, board_theme, piece_theme = BoardLayoutEditor(
+                board_theme=board_theme, piece_theme=piece_theme).run()
             if saved_path:
                 custom_layout = layout
         else:
             game = Game()
+            game.graphics.board_theme = board_theme
+            game.graphics.piece_theme = piece_theme
             if custom_defs is not None:
                 game.board.pieces_defs = custom_defs
             if custom_layout is not None:
                 game.board.from_dict(custom_layout)
                 game.graphics.set_board_size(game.board.board_size)
+            game.graphics.load_piece_icons(game.board.pieces_defs)
             game.main()
 
 

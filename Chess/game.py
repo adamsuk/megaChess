@@ -2240,21 +2240,29 @@ def _start_menu(screen, w, h):
         bh = 56
         x0 = gap
         btn_area_h = bh * 3 + gap * 2
-        y0 = h - btn_area_h - gap
+        # Place title proportionally based on the excess height, not anchored to h
+        frame_y = max(gap * 4, (h - w) // 4)
+        # Estimated title block height: two ~80px font lines + padding + hint texts
+        _title_block_h = w * 30 // 100
+        y0 = frame_y + _title_block_h
         btns = {
             'Play':        pygame.Rect(x0, y0,                  bw, bh),
             'Edit Pieces': pygame.Rect(x0, y0 + (bh + gap),     bw, bh),
             'Edit Layout': pygame.Rect(x0, y0 + (bh + gap) * 2, bw, bh),
         }
+        # Bottom corner squares sit just below the button group, always visible
+        _btn_bottom_y = y0 + btn_area_h + gap
     else:
         bw, bh = 210, 56
         total_w = bw * 3 + gap * 2
         x0 = w // 2 - total_w // 2
+        frame_y = h // 5
         btns = {
             'Play':         pygame.Rect(x0,                   h * 2 // 3, bw, bh),
             'Edit Pieces':  pygame.Rect(x0 + (bw + gap),      h * 2 // 3, bw, bh),
             'Edit Layout':  pygame.Rect(x0 + (bw + gap) * 2,  h * 2 // 3, bw, bh),
         }
+        _btn_bottom_y = h - 56 - gap  # landscape: near screen bottom as before
     btn_colors = {
         'Play':        (30,  75, 150),
         'Edit Pieces': (30, 100,  55),
@@ -2329,8 +2337,8 @@ def _start_menu(screen, w, h):
         margin = 16
         screen.blit(_corner_surf, (margin, margin))
         screen.blit(pygame.transform.flip(_corner_surf, True,  False), (w - _corner_w - margin, margin))
-        screen.blit(pygame.transform.flip(_corner_surf, False, True),  (margin, h - _corner_w - margin))
-        screen.blit(pygame.transform.flip(_corner_surf, True,  True),  (w - _corner_w - margin, h - _corner_w - margin))
+        screen.blit(pygame.transform.flip(_corner_surf, False, True),  (margin, _btn_bottom_y))
+        screen.blit(pygame.transform.flip(_corner_surf, True,  True),  (w - _corner_w - margin, _btn_bottom_y))
         screen.blit(scanlines, (0, 0))
 
         # Stacked two-colour pixel art title: MEGA (gold) + CHESS (teal)
@@ -2339,7 +2347,7 @@ def _start_menu(screen, w, h):
         title_w  = max(mega_surf.get_width(), chess_surf.get_width())
         title_h  = mega_surf.get_height() + chess_surf.get_height() + 4
         frame_x  = w // 2 - title_w // 2 - 24
-        frame_y  = h // 5
+        # frame_y pre-computed in layout block above
         pad = 16
         # Outer teal border + dark inner fill
         pygame.draw.rect(screen, Colours.HIGH,

@@ -200,7 +200,9 @@ class Game:
                 self.terminate_game()
 
             if event.type == locals.KEYDOWN:
-                if event.key == locals.K_s:
+                if event.key == locals.K_ESCAPE:
+                    self._quit_to_menu = True
+                elif event.key == locals.K_s:
                     self.save()
                 elif event.key == locals.K_l:
                     self.load()
@@ -218,13 +220,15 @@ class Game:
                 px, py = self.pixel_mouse_pos
 
                 # Button bar clicks (below the board)
-                if py >= self.graphics.window_size:
+                if py >= self.graphics._bar_y():
                     if self.graphics.save_btn_rect.collidepoint(px, py):
                         self.save()
                     elif self.graphics.load_btn_rect.collidepoint(px, py):
                         self.load()
                     elif self.graphics.hints_btn_rect.collidepoint(px, py):
                         self._toggle_hints()
+                    elif self.graphics.back_btn_rect.collidepoint(px, py):
+                        self._quit_to_menu = True
                     self.click = False  # consumed; don't treat as a board click
                     continue
 
@@ -323,9 +327,10 @@ class Game:
 
     def main(self):
         """"This executes the game and controls its flow."""
+        self._quit_to_menu = False
         self.setup()
 
-        while True:  # main game loop
+        while not self._quit_to_menu:
             self.event_loop()
             self.update()
 
@@ -460,9 +465,9 @@ class Graphics:
         pygame.display.set_caption(self.caption)
 
     def _btn_layout(self):
-        """Returns (button_width, button_height, padding) for the 3-button bar."""
+        """Returns (button_width, button_height, padding) for the 4-button bar."""
         pad = 8
-        bw = (self.window_size - pad * 4) // 3
+        bw = (self.window_size - pad * 5) // 4
         bh = self.button_bar_height - pad * 2
         return bw, bh, pad
 
@@ -485,6 +490,11 @@ class Graphics:
         bw, bh, pad = self._btn_layout()
         return pygame.Rect(pad * 3 + bw * 2, self._bar_y() + pad, bw, bh)
 
+    @property
+    def back_btn_rect(self):
+        bw, bh, pad = self._btn_layout()
+        return pygame.Rect(pad * 4 + bw * 3, self._bar_y() + pad, bw, bh)
+
     def draw_button_bar(self, mouse_px, save_exists, show_hints=True):
         """Draw the Save / Load / Hints button strip below the board — pixel art style."""
         bar_y = self._bar_y()
@@ -503,11 +513,17 @@ class Graphics:
             ('save',  'Save',  self.save_btn_rect,  True,        True),
             ('load',  'Load',  self.load_btn_rect,  save_exists, True),
             ('hints', 'Hints', self.hints_btn_rect, True,        show_hints),
+            ('back',  'Back',  self.back_btn_rect,  True,        True),
         ]:
             hovered = rect.collidepoint(*mouse_px) and enabled
             if not enabled:
                 bg, tc  = (30, 25, 55), (70, 60, 90)
                 bhi, blo = (45, 38, 75), (12, 8, 25)
+            elif icon_name == 'back':
+                # Back button: warm amber to distinguish as "exit" action
+                bg  = (155, 80, 30) if hovered else (110, 55, 20)
+                tc  = (255, 220, 170)
+                bhi, blo = (200, 120, 60), (60, 25, 5)
             elif not toggled:
                 # Hints-off: red-tinted
                 bg  = (90, 35, 35) if hovered else (65, 22, 22)
@@ -970,14 +986,16 @@ class PieceEditor:
         self.screen = pygame.display.set_mode((self.w, self.h), _flags)
         pygame.display.set_caption('megaChess — piece editor')
         self._piece_names_cache = []
-        _s = min(_ui_scale(self.w, self.h), 1.4)   # cap editor scale: text must fit in dense UI
-        self.title_font = pygame.font.Font('freesansbold.ttf', _fz(32, _s))
-        self.label_font = pygame.font.Font('freesansbold.ttf', _fz(22, _s))
-        self.small_font = pygame.font.Font('freesansbold.ttf', _fz(16, _s))
-        self.tiny_font  = pygame.font.Font('freesansbold.ttf', _fz(13, _s))
+        _raw = _ui_scale(self.w, self.h)
+        _font_s   = min(_raw, 1.5)   # fonts: slightly larger for readability
+        _layout_s = min(_raw, 1.3)   # layout: compact so text fits in buttons
+        self.title_font = pygame.font.Font('freesansbold.ttf', _fz(32, _font_s))
+        self.label_font = pygame.font.Font('freesansbold.ttf', _fz(22, _font_s))
+        self.small_font = pygame.font.Font('freesansbold.ttf', _fz(16, _font_s))
+        self.tiny_font  = pygame.font.Font('freesansbold.ttf', _fz(13, _font_s))
         # Override class constants with scaled instance values
-        self.PADDING  = _fz(16, _s)
-        self.HEADER_H = _fz(56, _s)
+        self.PADDING  = _fz(16, _layout_s)
+        self.HEADER_H = _fz(56, _layout_s)
 
     @property
     def _portrait(self):
@@ -1523,14 +1541,16 @@ class BoardLayoutEditor:
         self.h = info.current_h if _android else self.w
         self.screen = pygame.display.set_mode((self.w, self.h), _flags)
         pygame.display.set_caption('megaChess — board layout editor')
-        _s = min(_ui_scale(self.w, self.h), 1.4)   # cap editor scale: text must fit in dense UI
-        self.title_font = pygame.font.Font('freesansbold.ttf', _fz(28, _s))
-        self.label_font = pygame.font.Font('freesansbold.ttf', _fz(18, _s))
-        self.small_font = pygame.font.Font('freesansbold.ttf', _fz(14, _s))
-        self.tiny_font  = pygame.font.Font('freesansbold.ttf', _fz(12, _s))
+        _raw = _ui_scale(self.w, self.h)
+        _font_s   = min(_raw, 1.5)   # fonts: slightly larger for readability
+        _layout_s = min(_raw, 1.3)   # layout: compact so text fits in buttons
+        self.title_font = pygame.font.Font('freesansbold.ttf', _fz(28, _font_s))
+        self.label_font = pygame.font.Font('freesansbold.ttf', _fz(18, _font_s))
+        self.small_font = pygame.font.Font('freesansbold.ttf', _fz(14, _font_s))
+        self.tiny_font  = pygame.font.Font('freesansbold.ttf', _fz(12, _font_s))
         # Override class constants with scaled instance values
-        self.PADDING  = _fz(14, _s)
-        self.HEADER_H = _fz(48, _s)
+        self.PADDING  = _fz(14, _layout_s)
+        self.HEADER_H = _fz(48, _layout_s)
 
         self.board_theme = board_theme if board_theme in BOARD_THEMES else 'Classic'
         self.piece_theme = piece_theme if piece_theme in PIECE_THEMES else 'Classic'
@@ -2411,19 +2431,21 @@ def _start_menu(screen, w, h):
     eff_h = min(w, h)
     _corner_sz = 14 * 4   # _cell * 4, matches corner decoration built below
     if _portrait:
-        bh = _fz(56, _s)
+        btn_scale = min(_s, 1.3)           # cap so buttons don't dominate eff_h
+        bh = _fz(48, btn_scale)
         bw = w - gap * 2
         x0 = gap
-        btn_area_h = bh * 3 + gap * 2
+        btn_gap = _fz(12, btn_scale)       # spacing between portrait buttons
+        btn_area_h = bh * 3 + btn_gap * 2
         frame_y = max(gap * 2, eff_h // 8)
-        # y0: start buttons so they fit entirely within eff_h
-        y0 = eff_h - btn_area_h - gap
+        _btn_bottom_y = eff_h - _corner_sz - 16   # corners inside eff_h square
+        # lay out buttons just above the bottom corner row
+        y0 = _btn_bottom_y - btn_gap - btn_area_h
         btns = {
-            'Play':        pygame.Rect(x0, y0,                  bw, bh),
-            'Edit Pieces': pygame.Rect(x0, y0 + (bh + gap),     bw, bh),
-            'Edit Layout': pygame.Rect(x0, y0 + (bh + gap) * 2, bw, bh),
+            'Play':        pygame.Rect(x0, y0,                        bw, bh),
+            'Edit Pieces': pygame.Rect(x0, y0 + (bh + btn_gap),      bw, bh),
+            'Edit Layout': pygame.Rect(x0, y0 + (bh + btn_gap) * 2,  bw, bh),
         }
-        _btn_bottom_y = h - _corner_sz - 16   # bottom corners at true screen bottom
     else:
         bh = _fz(56, _s)
         bw = _fz(210, _s)
@@ -2435,7 +2457,7 @@ def _start_menu(screen, w, h):
             'Edit Pieces':  pygame.Rect(x0 + (bw + gap),      eff_h * 2 // 3, bw, bh),
             'Edit Layout':  pygame.Rect(x0 + (bw + gap) * 2,  eff_h * 2 // 3, bw, bh),
         }
-        _btn_bottom_y = h - _corner_sz - 16   # bottom corners at true screen bottom
+        _btn_bottom_y = eff_h - _corner_sz - 16   # corners inside eff_h square
     btn_colors = {
         'Play':        (30,  75, 150),
         'Edit Pieces': (30, 100,  55),
@@ -2576,8 +2598,8 @@ def _start_menu(screen, w, h):
             pygame.draw.line(screen, blo, rect.bottomleft, rect.bottomright, BEVEL)
             pygame.draw.line(screen, blo, rect.topright,   rect.bottomright, BEVEL)
             short = _label_map.get(label, label)
-            shadow_s = _pixel_text(short, _fz(18, _s), (0, 0, 0), bold=True)
-            txt_s    = _pixel_text(short, _fz(18, _s), tc,         bold=True)
+            shadow_s = _pixel_text(short, _fz(14, min(_s, 1.5)), (0, 0, 0), bold=True)
+            txt_s    = _pixel_text(short, _fz(14, min(_s, 1.5)), tc,         bold=True)
             total_w = ICN + 6 + txt_s.get_width()
             ix = rect.centerx - total_w // 2 + ICN // 2
             tx = rect.centerx - total_w // 2 + ICN + 6

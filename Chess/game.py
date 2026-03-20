@@ -2661,6 +2661,7 @@ def main():
     else:
         w = h = min(info.current_w, info.current_h)
     screen = pygame.display.set_mode((w, h), pygame.FULLSCREEN if _android else 0)
+    w, h = screen.get_size()
 
     custom_defs    = None
     custom_layout  = None

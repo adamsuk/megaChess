@@ -71,6 +71,7 @@ def make_graphics_stub(square_size=80):
     g.board_theme = 'Classic'
     g.piece_theme = 'Classic'
     g._s = 1.0
+    g.board_y_offset = 0
     return g
 
 

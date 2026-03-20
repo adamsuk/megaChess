@@ -391,6 +391,8 @@ class Graphics:
         self.show_hints = True   # toggle: show piece selection + legal-move highlighting
 
         self.frame_size = min(48, _fz(28, self._s))  # border for coord labels, capped so board stays large
+        # Centre board vertically in the space above the button bar on tall screens
+        self.board_y_offset = max(0, (self.screen_h - self.button_bar_height - self.window_size) // 2)
         self.board_theme = 'Classic'
         self.piece_theme = 'Classic'
 
@@ -542,19 +544,20 @@ class Graphics:
         f  = self.frame_size
         sq = self.square_size
         n  = self.board_size
+        yo = self.board_y_offset
         board_px = sq * n
         # Dark background behind the frame area (fill full screen so portrait gap is covered)
         pygame.draw.rect(self.screen, (8, 8, 18), (0, 0, self.screen_w, self.screen_h))
 
         # Pixel art double-border: bright teal outer (3px) + dark inner (2px)
-        pygame.draw.rect(self.screen, Colours.HIGH, (f - 5, f - 5, board_px + 10, board_px + 10), 3)
-        pygame.draw.rect(self.screen, (30, 25, 55), (f - 2, f - 2, board_px +  4, board_px +  4), 2)
+        pygame.draw.rect(self.screen, Colours.HIGH, (f - 5, yo + f - 5, board_px + 10, board_px + 10), 3)
+        pygame.draw.rect(self.screen, (30, 25, 55), (f - 2, yo + f - 2, board_px +  4, board_px +  4), 2)
 
         # Corner pixel accent squares in each corner of the frame
         for cx_off, cy_off in [(0, 0), (board_px + 4, 0),
                                 (0, board_px + 4), (board_px + 4, board_px + 4)]:
             pygame.draw.rect(self.screen, Colours.HIGH,
-                             (f - 5 + cx_off, f - 5 + cy_off, 6, 6))
+                             (f - 5 + cx_off, yo + f - 5 + cy_off, 6, 6))
 
         # Coordinate labels — pixel art style (blocky, no antialiasing)
         fsize = max(f - 10, 9)
@@ -563,12 +566,12 @@ class Graphics:
             cx = f + i * sq + sq // 2
             shadow = _pixel_text(ch, fsize, (0, 0, 0), bold=True)
             lbl    = _pixel_text(ch, fsize, Colours.GOLD, bold=True)
-            for centery in (f // 2, f + board_px + f // 2):
+            for centery in (yo + f // 2, yo + f + board_px + f // 2):
                 r = lbl.get_rect(centerx=cx, centery=centery)
                 self.screen.blit(shadow, r.move(1, 1))
                 self.screen.blit(lbl, r)
         for i in range(n):
-            cy = f + i * sq + sq // 2
+            cy = yo + f + i * sq + sq // 2
             ch = str(n - i)
             shadow = _pixel_text(ch, fsize, (0, 0, 0), bold=True)
             lbl    = _pixel_text(ch, fsize, Colours.GOLD, bold=True)
@@ -627,7 +630,7 @@ class Graphics:
         for x in xrange(self.board_size):
             for y in xrange(self.board_size):
                 sq_obj = board.matrix[int(x)][int(y)]
-                rx, ry = x * sq + self.frame_size, y * sq + self.frame_size
+                rx, ry = x * sq + self.frame_size, y * sq + self.frame_size + self.board_y_offset
                 if sq_obj.is_hole:
                     pygame.draw.rect(self.screen, t['hole'],    (rx, ry, sq, sq))
                     # Sunken bevel: dark top/left, bright bottom/right
@@ -651,12 +654,13 @@ class Graphics:
         grid_col = (0, 0, 0, 80)  # semi-transparent; draw as opaque approximation
         sep = (8, 8, 18)
         f = self.frame_size
+        yo = self.board_y_offset
         board_px = sq * self.board_size
         for i in range(1, self.board_size):
             pygame.draw.line(self.screen, sep,
-                             (f + i * sq, f), (f + i * sq, f + board_px))
+                             (f + i * sq, yo + f), (f + i * sq, yo + f + board_px))
             pygame.draw.line(self.screen, sep,
-                             (f, f + i * sq), (f + board_px, f + i * sq))
+                             (f, yo + f + i * sq), (f + board_px, yo + f + i * sq))
 
     def draw_board_pieces(self, board):
         """
@@ -689,7 +693,7 @@ class Graphics:
         """
         return (
             board_coords[0] * self.square_size + self.frame_size + self.piece_size,
-            board_coords[1] * self.square_size + self.frame_size + self.piece_size,
+            board_coords[1] * self.square_size + self.frame_size + self.piece_size + self.board_y_offset,
         )
 
     def board_coords(self, pixel_coords_tuple):
@@ -699,7 +703,7 @@ class Graphics:
         pixel_x, pixel_y = pixel_coords_tuple
         N = self.board_size - 1
         x = min(max((pixel_x - self.frame_size) // self.square_size, 0), N)
-        y = min(max((pixel_y - self.frame_size) // self.square_size, 0), N)
+        y = min(max((pixel_y - self.frame_size - self.board_y_offset) // self.square_size, 0), N)
         return (x, y)
 
     def highlight_squares(self, squares, origin):
@@ -714,7 +718,7 @@ class Graphics:
 
         for square in squares:
             cx = square[0] * self.square_size + self.frame_size + self.square_size // 2
-            cy = square[1] * self.square_size + self.frame_size + self.square_size // 2
+            cy = square[1] * self.square_size + self.frame_size + self.square_size // 2 + self.board_y_offset
             pygame.draw.circle(self.screen, Colours.HIGH, (cx, cy), dot_r)
             pygame.draw.circle(self.screen, DOT_RING,     (cx, cy), dot_r, 2)
 
@@ -722,7 +726,7 @@ class Graphics:
             ox, oy = origin
             pygame.draw.rect(self.screen, Colours.HIGH,
                              (ox * self.square_size + self.frame_size,
-                              oy * self.square_size + self.frame_size,
+                              oy * self.square_size + self.frame_size + self.board_y_offset,
                               self.square_size, self.square_size), border)
 
         self.highlights = True
@@ -744,7 +748,7 @@ class Graphics:
         pygame.draw.rect(bg, (8, 8, 18), pygame.Rect(4, 4, tw, th))
         bg.blit(text, (pad, pad // 2))
         self.text_surface_obj = bg
-        self.text_rect_obj = bg.get_rect(center=(self.window_size // 2, self.window_size // 2))
+        self.text_rect_obj = bg.get_rect(center=(self.window_size // 2, self.board_y_offset + self.window_size // 2))
 
     def draw_timed_message(self, message, duration_ms=3000):
         """Draws a temporary message near the top of the board — pixel art teal banner."""
@@ -756,7 +760,7 @@ class Graphics:
         pygame.draw.rect(bg, (30, 220, 220), pygame.Rect(3, 3, tw, th))
         bg.blit(text, (12, 6))
         self.timed_message_surface = bg
-        self.timed_message_rect = bg.get_rect(center=(self.window_size // 2, self.square_size // 2))
+        self.timed_message_rect = bg.get_rect(center=(self.window_size // 2, self.board_y_offset + self.square_size // 2))
         self.timed_message_until = pygame.time.get_ticks() + duration_ms
 
     # Board columns used for the promotion picker (centred on the board)
@@ -775,9 +779,10 @@ class Graphics:
         The four choices are queen / rook / bishop / knight.
         """
         cols, row = self._promotion_cols_row()
+        yo = self.board_y_offset
         # Pixel art bordered box behind the four squares
         border_x = cols[0] * self.square_size - 4
-        border_y = row * self.square_size - 4
+        border_y = yo + row * self.square_size - 4
         border_w = len(cols) * self.square_size + 8
         border_h = self.square_size + 8
         pygame.draw.rect(self.screen, (8, 8, 18),
@@ -787,7 +792,7 @@ class Graphics:
 
         for piece_type, col in zip(self.PROMOTION_PIECES, cols):
             sx = col * self.square_size
-            sy = row * self.square_size
+            sy = yo + row * self.square_size
             pygame.draw.rect(self.screen, Colours.HIGH,
                              (sx, sy, self.square_size, self.square_size))
             icon = self.piece_icons.get((piece_type, color_key))
@@ -965,7 +970,7 @@ class PieceEditor:
         self.screen = pygame.display.set_mode((self.w, self.h), _flags)
         pygame.display.set_caption('megaChess — piece editor')
         self._piece_names_cache = []
-        _s = _ui_scale(self.w, self.h)
+        _s = min(_ui_scale(self.w, self.h), 1.4)   # cap editor scale: text must fit in dense UI
         self.title_font = pygame.font.Font('freesansbold.ttf', _fz(32, _s))
         self.label_font = pygame.font.Font('freesansbold.ttf', _fz(22, _s))
         self.small_font = pygame.font.Font('freesansbold.ttf', _fz(16, _s))
@@ -1518,7 +1523,7 @@ class BoardLayoutEditor:
         self.h = info.current_h if _android else self.w
         self.screen = pygame.display.set_mode((self.w, self.h), _flags)
         pygame.display.set_caption('megaChess — board layout editor')
-        _s = _ui_scale(self.w, self.h)
+        _s = min(_ui_scale(self.w, self.h), 1.4)   # cap editor scale: text must fit in dense UI
         self.title_font = pygame.font.Font('freesansbold.ttf', _fz(28, _s))
         self.label_font = pygame.font.Font('freesansbold.ttf', _fz(18, _s))
         self.small_font = pygame.font.Font('freesansbold.ttf', _fz(14, _s))
@@ -2418,7 +2423,7 @@ def _start_menu(screen, w, h):
             'Edit Pieces': pygame.Rect(x0, y0 + (bh + gap),     bw, bh),
             'Edit Layout': pygame.Rect(x0, y0 + (bh + gap) * 2, bw, bh),
         }
-        _btn_bottom_y = eff_h - _corner_sz - gap
+        _btn_bottom_y = h - _corner_sz - 16   # bottom corners at true screen bottom
     else:
         bh = _fz(56, _s)
         bw = _fz(210, _s)
@@ -2430,7 +2435,7 @@ def _start_menu(screen, w, h):
             'Edit Pieces':  pygame.Rect(x0 + (bw + gap),      eff_h * 2 // 3, bw, bh),
             'Edit Layout':  pygame.Rect(x0 + (bw + gap) * 2,  eff_h * 2 // 3, bw, bh),
         }
-        _btn_bottom_y = eff_h - _corner_sz - gap
+        _btn_bottom_y = h - _corner_sz - 16   # bottom corners at true screen bottom
     btn_colors = {
         'Play':        (30,  75, 150),
         'Edit Pieces': (30, 100,  55),
@@ -2510,7 +2515,7 @@ def _start_menu(screen, w, h):
         screen.blit(scanlines, (0, 0))
 
         # Stacked two-colour pixel art title: MEGA (gold) + CHESS (teal)
-        _title_sz = _fz(72, min(_s, 1.5))   # cap title scale so it doesn't crowd buttons
+        _title_sz = _fz(72, min(_s, 1.1))   # cap title scale so it doesn't crowd buttons
         mega_surf  = _pixel_text('MEGA',  _title_sz, Colours.GOLD, bold=True)
         chess_surf = _pixel_text('CHESS', _title_sz, Colours.HIGH, bold=True)
         title_w  = max(mega_surf.get_width(), chess_surf.get_width())
@@ -2571,8 +2576,8 @@ def _start_menu(screen, w, h):
             pygame.draw.line(screen, blo, rect.bottomleft, rect.bottomright, BEVEL)
             pygame.draw.line(screen, blo, rect.topright,   rect.bottomright, BEVEL)
             short = _label_map.get(label, label)
-            shadow_s = _pixel_text(short, _fz(24, _s), (0, 0, 0), bold=True)
-            txt_s    = _pixel_text(short, _fz(24, _s), tc,         bold=True)
+            shadow_s = _pixel_text(short, _fz(18, _s), (0, 0, 0), bold=True)
+            txt_s    = _pixel_text(short, _fz(18, _s), tc,         bold=True)
             total_w = ICN + 6 + txt_s.get_width()
             ix = rect.centerx - total_w // 2 + ICN // 2
             tx = rect.centerx - total_w // 2 + ICN + 6

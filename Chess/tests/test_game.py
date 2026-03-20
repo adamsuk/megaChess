@@ -1380,6 +1380,7 @@ import unittest.mock as mock
 
 def make_layout_editor():
     """Instantiate BoardLayoutEditor without opening a real display window."""
+    from game import Graphics
     editor = object.__new__(BoardLayoutEditor)
     editor.w = 640
     editor.h = 640
@@ -1388,11 +1389,19 @@ def make_layout_editor():
     editor.label_font = pygame.font.Font('freesansbold.ttf', 18)
     editor.small_font = pygame.font.Font('freesansbold.ttf', 14)
     editor.tiny_font  = pygame.font.Font('freesansbold.ttf', 12)
-    editor.piece_icons = {}
     editor.board_theme = 'Classic'
     editor.piece_theme = 'Classic'
     editor.custom_board = None
     editor.custom_piece = None
+    editor.PADDING  = 14
+    editor.HEADER_H = 48
+    editor.BAR_H    = 48
+    editor._current_board_size = 8
+    editor._pieces_defs = {}  # empty — no SVGs in test env; icons fall back to circle+letter
+    # Minimal _gfx stub using for_editor
+    editor._gfx = Graphics.for_editor(640, 640, 48, 48, 8)
+    editor._gfx.screen = editor.screen
+    editor._gfx.piece_icons = {}
     return editor
 
 
@@ -1502,11 +1511,13 @@ class TestBoardLayoutEditorGeometry(unittest.TestCase):
         self.editor = make_layout_editor()
 
     def test_board_sq_size_is_positive(self):
-        self.assertGreater(self.editor._board_sq_size(), 0)
+        self.assertGreater(self.editor._gfx.square_size, 0)
 
     def test_board_sq_from_pixel_inside(self):
-        ox, oy = self.editor._board_origin()
-        sq = self.editor._board_sq_size()
+        g = self.editor._gfx
+        ox = g.frame_size
+        oy = g.board_y_offset + g.frame_size
+        sq = g.square_size
         # Centre of square (2, 3)
         px = ox + 2 * sq + sq // 2
         py = oy + 3 * sq + sq // 2
@@ -1516,7 +1527,9 @@ class TestBoardLayoutEditorGeometry(unittest.TestCase):
         self.assertIsNone(self.editor._board_sq_from_pixel(-10, -10))
 
     def test_palette_rects_covers_all_combinations(self):
-        rects = self.editor._palette_rects()
+        panel_rect = self.editor._panel_rect()
+        L = self.editor._compute_panel_layout(panel_rect, 8, 0, False)
+        rects = L.palette_rects
         # 2 colours × 6 piece types + 1 hole tool = 13 entries
         self.assertEqual(len(rects), 13)
         piece_rects = [(c, p, r) for c, p, r in rects if c != 'hole']
@@ -1529,11 +1542,8 @@ class TestBoardLayoutEditorGeometry(unittest.TestCase):
         self.assertEqual(rects[-1][1], 'hole')
 
     def test_button_rects_has_all_buttons(self):
-        _, oy = self.editor._board_origin()
-        sq = self.editor._board_sq_size()
-        btn_y = oy + sq * 8 + self.editor.PADDING
-        rects = self.editor._button_rects(btn_y, 40)
-        self.assertIn('← Back', rects)
+        rects = self.editor._bar_btn_rects()
+        self.assertIn('Back', rects)
         self.assertIn('Reset', rects)
         self.assertIn('Save', rects)
         self.assertIn('Play', rects)
@@ -1545,62 +1555,59 @@ class TestBoardLayoutEditorDraw(unittest.TestCase):
     def setUp(self):
         self.editor = make_layout_editor()
         self.layout = self.editor._default_layout()
-        sq = self.editor._board_sq_size()
-        _, oy = self.editor._board_origin()
-        self.btn_y = oy + sq * 8 + self.editor.PADDING
+        self.panel_rect = self.editor._panel_rect()
+        self.bar_btns   = self.editor._bar_btn_rects()
+        self.L = self.editor._compute_panel_layout(self.panel_rect, 8, 0, False)
+
+    def _draw(self, layout, selected, mouse, status='', scroll_y=0, shade_expanded=False):
+        self.editor._draw(layout, selected, mouse, scroll_y, shade_expanded, status,
+                          self.panel_rect, self.bar_btns, self.L)
 
     def test_draw_default_layout_no_status(self):
-        self.editor._draw(self.layout, ('white', 'pawn'), (0, 0),
-                          self.btn_y, 40, '', {}, 0, 0, 0, {}, 0)
+        self._draw(self.layout, ('white', 'pawn'), (0, 0))
 
     def test_draw_with_status_message(self):
-        self.editor._draw(self.layout, ('black', 'queen'), (0, 0),
-                          self.btn_y, 40, 'Saved!', {}, 0, 0, 0, {}, 0)
+        self._draw(self.layout, ('black', 'queen'), (0, 0), status='Saved!')
 
     def test_draw_with_mouse_over_board(self):
-        ox, oy = self.editor._board_origin()
-        sq = self.editor._board_sq_size()
+        g = self.editor._gfx
+        ox = g.frame_size
+        oy = g.board_y_offset + g.frame_size
+        sq = g.square_size
         mouse = (ox + sq * 3 + sq // 2, oy + sq * 4 + sq // 2)
-        self.editor._draw(self.layout, ('white', 'rook'), mouse,
-                          self.btn_y, 40, '', {}, 0, 0, 0, {}, 0)
+        self._draw(self.layout, ('white', 'rook'), mouse)
 
     def test_draw_with_empty_layout(self):
         empty = self.editor._default_layout()
         for x in range(8):
             for y in range(8):
                 empty['matrix'][x][y] = None
-        self.editor._draw(empty, ('white', 'knight'), (0, 0),
-                          self.btn_y, 40, '', {}, 0, 0, 0, {}, 0)
+        self._draw(empty, ('white', 'knight'), (0, 0))
 
     def test_draw_with_black_piece_fallback(self):
         layout = self.editor._default_layout()
-        # Force a piece type not in piece_icons (no SVG → fallback path)
         layout['matrix'][4][4] = {'piece_type': 'rook', 'color': 'black', 'has_moved': False}
-        # piece_icons is empty in the stub, so fallback circle+letter code runs
-        self.editor._draw(layout, ('white', 'pawn'), (0, 0),
-                          self.btn_y, 40, '', {}, 0, 0, 0, {}, 0)
+        self._draw(layout, ('white', 'pawn'), (0, 0))
 
     def test_draw_selected_palette_item_highlighted(self):
-        # No assertion on pixels — just confirm no exception with selected item
-        self.editor._draw(self.layout, ('black', 'bishop'), (0, 0),
-                          self.btn_y, 40, '', {}, 0, 0, 0, {}, 0)
+        self._draw(self.layout, ('black', 'bishop'), (0, 0))
 
     def test_draw_mouse_hover_over_palette_item(self):
-        # Hit the 'hov' branch in palette rendering (non-selected item under mouse)
-        palette_rects = self.editor._palette_rects()
-        # Hover over the second palette item while first is selected
-        selected = (palette_rects[0][0], palette_rects[0][1])
-        hover_rect = palette_rects[1][2]
-        mouse = hover_rect.center
-        self.editor._draw(self.layout, selected, mouse, self.btn_y, 40, '', {}, 0, 0, 0, {}, 0)
+        rects = self.L.palette_rects
+        selected = (rects[0][0], rects[0][1])
+        mouse = rects[1][2].center
+        self._draw(self.layout, selected, mouse)
 
     def test_draw_with_piece_icons_populated(self):
-        # Hit the 'icon' branch for both board pieces and palette items
         dummy_icon = pygame.Surface((30, 30))
-        self.editor.piece_icons[('pawn', 'white')] = dummy_icon
-        self.editor.piece_icons[('pawn', 'black')] = dummy_icon
-        self.editor._draw(self.layout, ('white', 'pawn'), (0, 0),
-                          self.btn_y, 40, '', {}, 0, 0, 0, {}, 0)
+        self.editor._gfx.piece_icons[('pawn', 'white')] = dummy_icon
+        self.editor._gfx.piece_icons[('pawn', 'black')] = dummy_icon
+        self._draw(self.layout, ('white', 'pawn'), (0, 0))
+
+    def test_draw_with_shade_expanded(self):
+        L_expanded = self.editor._compute_panel_layout(self.panel_rect, 8, 0, True)
+        self.editor._draw(self.layout, ('white', 'pawn'), (0, 0), 0, True, '',
+                          self.panel_rect, self.bar_btns, L_expanded)
 
 
 class TestBoardLayoutEditorRun(unittest.TestCase):
@@ -1634,8 +1641,7 @@ class TestBoardLayoutEditorRun(unittest.TestCase):
 
     def test_back_button_click_exits(self):
         editor = make_layout_editor()
-        btn_y = editor._btn_y()
-        back_rect = editor._button_rects(btn_y, 40)['← Back']
+        back_rect = editor._bar_btn_rects()['Back']
         ev = self._make_event(pygame.MOUSEBUTTONDOWN,
                               pos=back_rect.center, button=1)
         layout, saved, *_ = self._run_with_events([ev])
@@ -1643,8 +1649,7 @@ class TestBoardLayoutEditorRun(unittest.TestCase):
 
     def test_play_button_click_exits(self):
         editor = make_layout_editor()
-        btn_y = editor._btn_y()
-        play_rect = editor._button_rects(btn_y, 40)['Play']
+        play_rect = editor._bar_btn_rects()['Play']
         ev = self._make_event(pygame.MOUSEBUTTONDOWN,
                               pos=play_rect.center, button=1)
         layout, saved, *_ = self._run_with_events([ev])
@@ -1653,8 +1658,7 @@ class TestBoardLayoutEditorRun(unittest.TestCase):
 
     def test_reset_button_click(self):
         editor = make_layout_editor()
-        btn_y = editor._btn_y()
-        reset_rect = editor._button_rects(btn_y, 40)['Reset']
+        reset_rect = editor._bar_btn_rects()['Reset']
         esc = self._make_event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
         ev = self._make_event(pygame.MOUSEBUTTONDOWN,
                               pos=reset_rect.center, button=1)
@@ -1668,8 +1672,7 @@ class TestBoardLayoutEditorRun(unittest.TestCase):
 
     def test_save_button_click(self):
         editor = make_layout_editor()
-        btn_y = editor._btn_y()
-        save_rect = editor._button_rects(btn_y, 40)['Save']
+        save_rect = editor._bar_btn_rects()['Save']
         esc = self._make_event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
         ev = self._make_event(pygame.MOUSEBUTTONDOWN,
                               pos=save_rect.center, button=1)
@@ -1688,8 +1691,10 @@ class TestBoardLayoutEditorRun(unittest.TestCase):
 
     def test_left_click_on_board_places_piece(self):
         editor = make_layout_editor()
-        sq = editor._board_sq_size()
-        ox, oy = editor._board_origin()
+        g = editor._gfx
+        sq = g.square_size
+        ox = g.frame_size
+        oy = g.board_y_offset + g.frame_size
         # Click on square (3, 3)
         px = ox + 3 * sq + sq // 2
         py = oy + 3 * sq + sq // 2
@@ -1705,8 +1710,10 @@ class TestBoardLayoutEditorRun(unittest.TestCase):
 
     def test_right_click_on_board_clears_piece(self):
         editor = make_layout_editor()
-        sq = editor._board_sq_size()
-        ox, oy = editor._board_origin()
+        g = editor._gfx
+        sq = g.square_size
+        ox = g.frame_size
+        oy = g.board_y_offset + g.frame_size
         # Click on square (0, 7) which has a white rook in default layout
         px = ox + 0 * sq + sq // 2
         py = oy + 7 * sq + sq // 2
@@ -1722,8 +1729,10 @@ class TestBoardLayoutEditorRun(unittest.TestCase):
     def test_left_click_same_piece_removes_it(self):
         """Clicking the same piece type on a square removes it."""
         editor = make_layout_editor()
-        sq = editor._board_sq_size()
-        ox, oy = editor._board_origin()
+        g = editor._gfx
+        sq = g.square_size
+        ox = g.frame_size
+        oy = g.board_y_offset + g.frame_size
         # White pawn is the default selection; row 6 has white pawns
         px = ox + 2 * sq + sq // 2
         py = oy + 6 * sq + sq // 2
@@ -1740,11 +1749,10 @@ class TestBoardLayoutEditorRun(unittest.TestCase):
     def test_palette_click_changes_selection(self):
         """Clicking a palette item changes the selected piece."""
         editor = make_layout_editor()
-        sq = editor._board_sq_size()
-        _, oy = editor._board_origin()
-        btn_y = oy + sq * 8 + editor.PADDING
+        panel_rect = editor._panel_rect()
+        L = editor._compute_panel_layout(panel_rect, 8, 0, False)
         # Pick the first palette entry (white king)
-        first_rect = editor._palette_rects()[0][2]
+        first_rect = L.palette_rects[0][2]
         esc = self._make_event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
         ev = self._make_event(pygame.MOUSEBUTTONDOWN,
                               pos=first_rect.center, button=1)
@@ -1819,8 +1827,10 @@ class TestBoardLayoutEditorHoles(unittest.TestCase):
 
     def _click_board_sq(self, bx, by, button=1):
         editor = make_layout_editor()
-        sq = editor._board_sq_size()
-        ox, oy = editor._board_origin()
+        g = editor._gfx
+        sq = g.square_size
+        ox = g.frame_size
+        oy = g.board_y_offset + g.frame_size
         px = ox + bx * sq + sq // 2
         py = oy + by * sq + sq // 2
         return self._make_event(pygame.MOUSEBUTTONDOWN,
@@ -1828,17 +1838,22 @@ class TestBoardLayoutEditorHoles(unittest.TestCase):
 
     def _hole_palette_event(self):
         """Return a click event targeting the hole palette entry."""
-        editor = make_layout_editor()
-        hole_rect = self.editor._palette_rects()[-1][2]  # last entry = hole
+        panel_rect = self.editor._panel_rect()
+        L = self.editor._compute_panel_layout(panel_rect, 8, 0, False)
+        hole_rect = L.palette_rects[-1][2]  # last entry = hole
         return self._make_event(pygame.MOUSEBUTTONDOWN,
                                 pos=hole_rect.center, button=1)
 
     def test_selecting_hole_then_clicking_board_creates_hole(self):
         """Select hole tool, click an empty square → 'hole' sentinel placed."""
         editor = make_layout_editor()
-        sq = editor._board_sq_size()
-        ox, oy = editor._board_origin()
-        hole_rect = editor._palette_rects()[-1][2]
+        g = editor._gfx
+        sq = g.square_size
+        ox = g.frame_size
+        oy = g.board_y_offset + g.frame_size
+        panel_rect = editor._panel_rect()
+        L = editor._compute_panel_layout(panel_rect, 8, 0, False)
+        hole_rect = L.palette_rects[-1][2]
         px = ox + 3 * sq + sq // 2
         py = oy + 3 * sq + sq // 2
         sel_ev = self._make_event(pygame.MOUSEBUTTONDOWN,
@@ -1856,9 +1871,13 @@ class TestBoardLayoutEditorHoles(unittest.TestCase):
     def test_clicking_hole_square_again_restores_empty(self):
         """Clicking a hole square with the hole tool selected toggles it back to None."""
         editor = make_layout_editor()
-        sq = editor._board_sq_size()
-        ox, oy = editor._board_origin()
-        hole_rect = editor._palette_rects()[-1][2]
+        g = editor._gfx
+        sq = g.square_size
+        ox = g.frame_size
+        oy = g.board_y_offset + g.frame_size
+        panel_rect = editor._panel_rect()
+        L = editor._compute_panel_layout(panel_rect, 8, 0, False)
+        hole_rect = L.palette_rects[-1][2]
         # Target a clear square in the middle of the board
         px = ox + 3 * sq + sq // 2
         py = oy + 3 * sq + sq // 2
@@ -1876,9 +1895,13 @@ class TestBoardLayoutEditorHoles(unittest.TestCase):
     def test_right_click_clears_hole(self):
         """Right-clicking a hole square clears it (same as clearing pieces)."""
         editor = make_layout_editor()
-        sq = editor._board_sq_size()
-        ox, oy = editor._board_origin()
-        hole_rect = editor._palette_rects()[-1][2]
+        g = editor._gfx
+        sq = g.square_size
+        ox = g.frame_size
+        oy = g.board_y_offset + g.frame_size
+        panel_rect = editor._panel_rect()
+        L = editor._compute_panel_layout(panel_rect, 8, 0, False)
+        hole_rect = L.palette_rects[-1][2]
         px = ox + 4 * sq + sq // 2
         py = oy + 4 * sq + sq // 2
         sel_ev = self._make_event(pygame.MOUSEBUTTONDOWN, pos=hole_rect.center, button=1)
@@ -1897,18 +1920,20 @@ class TestBoardLayoutEditorHoles(unittest.TestCase):
         layout = self.editor._default_layout()
         layout['matrix'][3][3] = 'hole'
         layout['matrix'][5][5] = 'hole'
-        sq = self.editor._board_sq_size()
-        _, oy = self.editor._board_origin()
-        btn_y = oy + sq * 8 + self.editor.PADDING
-        self.editor._draw(layout, 'hole', (0, 0), btn_y, 40, '', {}, 0, 0, 0, {}, 0)
+        panel_rect = self.editor._panel_rect()
+        bar_btns   = self.editor._bar_btn_rects()
+        L = self.editor._compute_panel_layout(panel_rect, 8, 0, False)
+        self.editor._draw(layout, 'hole', (0, 0), 0, False, '',
+                          panel_rect, bar_btns, L)
 
     def test_draw_hole_palette_entry_selected(self):
         """_draw() with hole tool selected renders hole palette entry highlighted."""
         layout = self.editor._default_layout()
-        sq = self.editor._board_sq_size()
-        _, oy = self.editor._board_origin()
-        btn_y = oy + sq * 8 + self.editor.PADDING
-        self.editor._draw(layout, 'hole', (0, 0), btn_y, 40, '', {}, 0, 0, 0, {}, 0)
+        panel_rect = self.editor._panel_rect()
+        bar_btns   = self.editor._bar_btn_rects()
+        L = self.editor._compute_panel_layout(panel_rect, 8, 0, False)
+        self.editor._draw(layout, 'hole', (0, 0), 0, False, '',
+                          panel_rect, bar_btns, L)
 
     def test_hole_layout_applied_to_board(self):
         """A layout dict with 'hole' values loads correctly into Board."""
@@ -2100,21 +2125,23 @@ class TestResizeLayout(unittest.TestCase):
         self.assertIsNone(result['en_passant_target'])
 
     def test_size_rects_returns_two_rects(self):
-        minus_rect, plus_rect = self.editor._size_rects(8)
-        self.assertIsInstance(minus_rect, pygame.Rect)
-        self.assertIsInstance(plus_rect, pygame.Rect)
+        panel_rect = self.editor._panel_rect()
+        L = self.editor._compute_panel_layout(panel_rect, 8, 0, False)
+        self.assertIsInstance(L.minus_rect, pygame.Rect)
+        self.assertIsInstance(L.plus_rect,  pygame.Rect)
 
     def test_size_rects_distinct_positions(self):
-        minus_rect, plus_rect = self.editor._size_rects(8)
-        self.assertNotEqual(minus_rect.x, plus_rect.x)
+        panel_rect = self.editor._panel_rect()
+        L = self.editor._compute_panel_layout(panel_rect, 8, 0, False)
+        self.assertNotEqual(L.minus_rect.x, L.plus_rect.x)
 
     def test_plus_click_increases_size(self):
         """Clicking + in the run loop increases board_size by 1."""
         editor = make_layout_editor()
-        layout = editor._default_layout()  # board_size=8
-        _, plus_rect = editor._size_rects(8)
+        panel_rect = editor._panel_rect()
+        L = editor._compute_panel_layout(panel_rect, 8, 0, False)
         esc = self._make_event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
-        ev = self._make_event(pygame.MOUSEBUTTONDOWN, pos=plus_rect.center, button=1)
+        ev = self._make_event(pygame.MOUSEBUTTONDOWN, pos=L.plus_rect.center, button=1)
         with mock.patch('game._CUSTOM_LAYOUT_PATH', '/nonexistent/_layout.json'), \
              mock.patch('pygame.event.get', side_effect=[[ev], [esc]]), \
              mock.patch('pygame.display.update'), \
@@ -2125,10 +2152,10 @@ class TestResizeLayout(unittest.TestCase):
     def test_minus_click_decreases_size(self):
         """Clicking − in the run loop decreases board_size by 1."""
         editor = make_layout_editor()
-        layout_data = editor._default_layout()  # board_size=8
-        minus_rect, _ = editor._size_rects(8)
+        panel_rect = editor._panel_rect()
+        L = editor._compute_panel_layout(panel_rect, 8, 0, False)
         esc = self._make_event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
-        ev = self._make_event(pygame.MOUSEBUTTONDOWN, pos=minus_rect.center, button=1)
+        ev = self._make_event(pygame.MOUSEBUTTONDOWN, pos=L.minus_rect.center, button=1)
         with mock.patch('game._CUSTOM_LAYOUT_PATH', '/nonexistent/_layout.json'), \
              mock.patch('pygame.event.get', side_effect=[[ev], [esc]]), \
              mock.patch('pygame.display.update'), \

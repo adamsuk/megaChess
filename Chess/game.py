@@ -61,6 +61,17 @@ def _resize_event_size(event):
     return None
 
 
+def _resize_needs_set_mode(event):
+    """Return True only for VIDEORESIZE (pygame 1.x).
+
+    On pygame 2.x, WINDOWRESIZED fires after the OS has already resized the
+    underlying surface — calling set_mode() again is redundant and causes a
+    brief blank / flicker frame.  VIDEORESIZE (pygame 1.x) does require a
+    set_mode() call to obtain a correctly-sized surface.
+    """
+    return event.type == pygame.VIDEORESIZE
+
+
 def _pixel_text(text, size, color, bold=False):
     """Return a pygame Surface with genuine pixel-art text.
     Renders at half size with no antialiasing, then scales up 2x with
@@ -230,7 +241,11 @@ class Game:
 
             _sz = _resize_event_size(event)
             if _sz:
-                self.graphics._reinit_layout(*_sz)
+                if _resize_needs_set_mode(event):
+                    self.graphics._reinit_layout(*_sz)
+                else:
+                    self.graphics.screen = pygame.display.get_surface()
+                    self.graphics._recompute_dims(*_sz)
                 self.graphics.load_piece_icons(self.board.pieces_defs)
                 continue
 
@@ -412,16 +427,14 @@ class Graphics:
         info = pygame.display.Info()
         self._reinit_layout(info.current_w, info.current_h)
 
-    def _reinit_layout(self, new_w, new_h):
-        """Recompute all display-derived dimensions and resize the pygame surface.
+    def _recompute_dims(self, new_w, new_h):
+        """Recompute all dimension variables from a new screen size, WITHOUT calling set_mode.
 
-        Called at startup and whenever an orientation-change / resize event fires.
-        Board state (board_size, piece_icons, etc.) is preserved across calls.
+        Use this for pygame 2.x WINDOWRESIZED events where the OS has already
+        resized the surface.  Call _reinit_layout instead when a set_mode() is
+        also required (startup, or pygame 1.x VIDEORESIZE).
         """
         _android = _on_android()
-        _flags = pygame.FULLSCREEN if _android else 0
-        # Scale all UI dimensions to the screen size on Android.
-        # button_bar_height must be known before window_size calculation.
         self._s = _ui_scale(new_w, new_h)
         self.button_bar_height = _fz(48, self._s)
         self.window_size = max(0, min(new_w, new_h - self.button_bar_height))
@@ -431,13 +444,65 @@ class Graphics:
         else:
             self.screen_w = self.window_size
             self.screen_h = self.window_size + self.button_bar_height
-        self.screen = pygame.display.set_mode((self.screen_w, self.screen_h), _flags)
         self.square_size = self.window_size // self.board_size
         self.piece_size = self.square_size // 2
         self.piece_font = pygame.font.SysFont(None, max(self.piece_size, 1))
-        self.frame_size = min(48, _fz(28, self._s))  # border for coord labels, capped so board stays large
-        # Centre board vertically in the space above the button bar on tall screens
+        self.frame_size = min(48, _fz(28, self._s))
         self.board_y_offset = max(0, (self.screen_h - self.button_bar_height - self.window_size) // 2)
+
+    def _reinit_layout(self, new_w, new_h):
+        """Resize the pygame display surface then recompute all dimensions.
+
+        Called at startup and for pygame 1.x VIDEORESIZE events.
+        Board state (board_size, piece_icons, etc.) is preserved across calls.
+        """
+        _android = _on_android()
+        _flags = pygame.FULLSCREEN if _android else 0
+        self._recompute_dims(new_w, new_h)
+        self.screen = pygame.display.set_mode((self.screen_w, self.screen_h), _flags)
+
+    @classmethod
+    def for_editor(cls, w, h, header_h, bar_h, board_size=8):
+        """Create a Graphics instance attached to the current display surface (no set_mode).
+
+        Positions the board immediately below the header.  Used by BoardLayoutEditor
+        so the board is rendered by the same code path as the main game.
+        """
+        g = object.__new__(cls)
+        g.fps = 60
+        g.clock = pygame.time.Clock()
+        g.board_size = board_size
+        g.message = False
+        g.timed_message_surface = None
+        g.timed_message_rect = None
+        g.timed_message_until = 0
+        g.piece_icons = {}
+        g.highlights = False
+        g.show_hints = False
+        g.board_theme = 'Classic'
+        g.piece_theme = 'Classic'
+        g.screen = pygame.display.get_surface()
+        g.screen_w = w
+        g.screen_h = h
+        g._s = _ui_scale(w, h)
+        g.button_bar_height = bar_h
+        _portrait = h > w * 1.1
+        available_h = h - header_h - bar_h
+        if _portrait:
+            # Portrait: board uses top half of content area, panel goes below
+            board_avail_w = w
+            board_avail_h = available_h // 2
+        else:
+            # Landscape: board uses left 60%, panel to the right
+            board_avail_w = w * 3 // 5
+            board_avail_h = available_h
+        g.window_size = min(board_avail_w, board_avail_h)
+        g.frame_size = min(48, _fz(28, g._s))
+        g.square_size = max(1, (g.window_size - g.frame_size * 2) // board_size)
+        g.piece_size = g.square_size // 2
+        g.piece_font = pygame.font.SysFont(None, max(g.piece_size, 1))
+        g.board_y_offset = header_h
+        return g
 
     # Hex colours used to colorize SVG templates for each side (pixel art tonal palette)
     ICON_COLOURS = {
@@ -1022,21 +1087,27 @@ class PieceEditor:
         self._reinit_display(info.current_w, info.current_h)
         pygame.display.set_caption('megaChess — piece editor')
 
-    def _reinit_display(self, new_w, new_h):
-        """Recompute screen dimensions and fonts after an orientation change."""
+    def _reinit_display(self, new_w, new_h, set_mode=True):
+        """Recompute screen dimensions and fonts after an orientation change.
+
+        set_mode=False skips pygame.display.set_mode() — use this for pygame 2.x
+        WINDOWRESIZED events where the OS has already resized the surface.
+        """
         _android = _on_android()
-        _flags = pygame.FULLSCREEN if _android else 0
         self.w = new_w if _android else min(new_w, new_h)
         self.h = new_h if _android else self.w
-        self.screen = pygame.display.set_mode((self.w, self.h), _flags)
+        if set_mode:
+            _flags = pygame.FULLSCREEN if _android else 0
+            self.screen = pygame.display.set_mode((self.w, self.h), _flags)
+        else:
+            self.screen = pygame.display.get_surface()
         _raw = _ui_scale(self.w, self.h)
-        _font_s   = min(_raw, 2.0)   # fonts scale up to 2× — buttons stay safe via _fit_font
-        _layout_s = min(_raw, 1.3)   # layout: compact so text fits in buttons
+        _font_s   = min(_raw, 2.0)
+        _layout_s = min(_raw, 1.3)
         self.title_font = pygame.font.Font('freesansbold.ttf', _fz(32, _font_s))
         self.label_font = pygame.font.Font('freesansbold.ttf', _fz(22, _font_s))
         self.small_font = pygame.font.Font('freesansbold.ttf', _fz(16, _font_s))
         self.tiny_font  = pygame.font.Font('freesansbold.ttf', _fz(13, _font_s))
-        # Override class constants with scaled instance values
         self.PADDING  = _fz(16, _layout_s)
         self.HEADER_H = _fz(56, _layout_s)
 
@@ -1090,7 +1161,7 @@ class PieceEditor:
 
                 _sz = _resize_event_size(event)
                 if _sz:
-                    self._reinit_display(*_sz)
+                    self._reinit_display(*_sz, set_mode=_resize_needs_set_mode(event))
                     continue
 
                 if event.type == locals.KEYDOWN and event.key == locals.K_ESCAPE:
@@ -1561,17 +1632,14 @@ class BoardLayoutEditor:
     BTN_SAVE    = ( 30, 110,  55)
     BTN_PLAY    = ( 30,  75, 150)
     BTN_RST     = (120,  40,  40)
-    TITLE_COLOR = (220, 170,  40)   # gold
-    CREAM       = Colours.CREAM
-    BROWN       = Colours.BROWN
+    TITLE_COLOR = (220, 170,  40)
     HIGH        = Colours.HIGH
     PADDING     = 14
-    HEADER_H    = 48   # reserved height for title + keystroke hint row
+    HEADER_H    = 48
+    BAR_H       = 48
 
-    # Piece types in palette order
     PALETTE_PIECES = ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn']
 
-    # Shade control rows: (label, 'board'/'piece', sub-key or None, [color-keys])
     _SHADE_CONTROLS = [
         ('Light Squares', 'board', None,    ['light', 'light_hi', 'light_lo']),
         ('Dark Squares',  'board', None,    ['dark',  'dark_hi',  'dark_lo']),
@@ -1588,45 +1656,45 @@ class BoardLayoutEditor:
 
         self.board_theme = board_theme if board_theme in BOARD_THEMES else 'Classic'
         self.piece_theme = piece_theme if piece_theme in PIECE_THEMES else 'Classic'
-
-        # Custom shade overrides (None = use the selected theme's colours as-is)
         self.custom_board = copy.deepcopy(custom_board) if custom_board else None
         self.custom_piece = copy.deepcopy(custom_piece) if custom_piece else None
+        self._current_board_size = 8
 
         self._reinit_display(info.current_w, info.current_h)
         pygame.display.set_caption('megaChess — board layout editor')
 
-    def _reinit_display(self, new_w, new_h):
-        """Recompute screen dimensions and fonts after an orientation change."""
+    def _reinit_display(self, new_w, new_h, set_mode=True):
         _android = _on_android()
-        _flags = pygame.FULLSCREEN if _android else 0
         self.w = new_w if _android else min(new_w, new_h)
         self.h = new_h if _android else self.w
-        self.screen = pygame.display.set_mode((self.w, self.h), _flags)
+        if set_mode:
+            _flags = pygame.FULLSCREEN if _android else 0
+            self.screen = pygame.display.set_mode((self.w, self.h), _flags)
+        else:
+            self.screen = pygame.display.get_surface()
         _raw = _ui_scale(self.w, self.h)
-        _font_s   = min(_raw, 2.0)   # fonts scale up to 2× — buttons stay safe via _fit_font
-        _layout_s = min(_raw, 1.3)   # layout: compact so text fits in buttons
+        _font_s   = min(_raw, 2.0)
+        _layout_s = min(_raw, 1.3)
         self.title_font = pygame.font.Font('freesansbold.ttf', _fz(28, _font_s))
         self.label_font = pygame.font.Font('freesansbold.ttf', _fz(18, _font_s))
         self.small_font = pygame.font.Font('freesansbold.ttf', _fz(14, _font_s))
         self.tiny_font  = pygame.font.Font('freesansbold.ttf', _fz(12, _font_s))
-        # Override class constants with scaled instance values
         self.PADDING  = _fz(14, _layout_s)
         self.HEADER_H = _fz(48, _layout_s)
+        self.BAR_H    = _fz(48, _layout_s)
 
-        # Piece icon rendering (for palette + board preview)
         self._pieces_defs = AllPieces().pieces_defs
-        self.piece_icons = {}
+        self._gfx = Graphics.for_editor(
+            self.w, self.h, self.HEADER_H, self.BAR_H,
+            self._current_board_size)
+        self._gfx.board_theme = self.board_theme
+        self._gfx.piece_theme = self.piece_theme
         self._reload_icons()
 
-    @property
-    def _portrait(self):
-        return self.h > self.w * 1.1
-
     def _reload_icons(self):
-        """Re-render piece icons using current piece colours (custom or theme)."""
-        sq = self._board_sq_size(8)
-        self.piece_icons = {}
+        """Re-render piece icons into self._gfx.piece_icons."""
+        sq = self._gfx.square_size
+        self._gfx.piece_icons = {}
         colors = self.custom_piece if self.custom_piece else PIECE_THEMES[self.piece_theme]
         for piece_type, defn in self._pieces_defs.items():
             path = defn.get('icon')
@@ -1644,8 +1712,8 @@ class BoardLayoutEditor:
                            .replace('{fill_lo}', colours['fill_lo'])
                            .replace('{stroke}',  colours['stroke'])
                            .replace('{accent}',  colours['accent']))
-                    px = sq - 6
-                    self.piece_icons[(piece_type, color_name)] = render_svg(svg, (px, px))
+                    px = max(8, sq - 6)
+                    self._gfx.piece_icons[(piece_type, color_name)] = render_svg(svg, (px, px))
                 except Exception:
                     pass
 
@@ -1687,172 +1755,172 @@ class BoardLayoutEditor:
                         self.custom_piece[sub][k], delta)
             self._reload_icons()
 
-    def _shade_rects(self, panel_x, panel_w, start_y):
-        """Return list of (minus_rect, swatch_rect, plus_rect) for each shade row."""
-        btn_w = max(20, panel_w // 9)
-        sw_w  = max(18, panel_w // 7)
-        row_h = 28
-        gap   = 5
-        rects = []
-        for i in range(len(self._SHADE_CONTROLS)):
-            y  = start_y + i * (row_h + gap)
-            cy = y + row_h // 2
-            mr = pygame.Rect(panel_x + panel_w - btn_w * 2 - sw_w - 8,
-                             cy - 11, btn_w, 22)
-            sr = pygame.Rect(mr.right + 4, cy - 9, sw_w, 18)
-            pr = pygame.Rect(sr.right + 4, cy - 11, btn_w, 22)
-            rects.append((mr, sr, pr))
-        return rects
-
     # ------------------------------------------------------------------
     # Geometry
     # ------------------------------------------------------------------
 
-    def _board_sq_size(self, board_size=8):
-        """Size of each board square in pixels."""
-        if self._portrait:
-            return (self.w - self.PADDING * 2) // board_size
-        board_area = self.w * 3 // 4   # board uses left 3/4 of the window
-        return board_area // board_size
+    MIN_BOARD_SIZE = 4
+    MAX_BOARD_SIZE = 12
 
-    def _board_origin(self):
-        """Top-left pixel corner of the board."""
-        if self._portrait:
-            return (self.PADDING, self.HEADER_H)
-        return (0, self.HEADER_H)
+    def _panel_rect(self):
+        """Rect for the scrollable options panel (right in landscape, below in portrait)."""
+        g = self._gfx
+        board_bottom = g.board_y_offset + g.frame_size * 2 + g.square_size * g.board_size
+        board_right  = g.frame_size * 2 + g.square_size * g.board_size
+        bar_top = self.h - self.BAR_H
+        if self.h > self.w * 1.1:   # portrait
+            return pygame.Rect(0, board_bottom, self.w, max(0, bar_top - board_bottom))
+        else:                        # landscape
+            return pygame.Rect(board_right, self.HEADER_H,
+                               max(0, self.w - board_right),
+                               max(0, bar_top - self.HEADER_H))
 
-    def _panel_x(self, board_size=8):
-        if self._portrait:
-            # panel is below the board, not to the right — x starts at left edge
-            return self.PADDING
-        sq = self._board_sq_size(board_size)
-        ox, _ = self._board_origin()
-        return ox + sq * board_size + self.PADDING
+    def _bar_rect(self):
+        return pygame.Rect(0, self.h - self.BAR_H, self.w, self.BAR_H)
 
-    def _panel_top_y(self, board_size=8):
-        """Y-coordinate where the right/below panel starts."""
-        if self._portrait:
-            sq = self._board_sq_size(board_size)
-            _, oy = self._board_origin()
-            return oy + sq * board_size + self.PADDING
-        return self.HEADER_H  # same as _board_origin y
+    def _bar_btn_rects(self):
+        labels = ['Back', 'Reset', 'Save', 'Play']
+        bar_y = self.h - self.BAR_H
+        pad = 8
+        bh = self.BAR_H - pad * 2
+        bw = (self.w - pad * (len(labels) + 1)) // len(labels)
+        return {label: pygame.Rect(pad + i * (bw + pad), bar_y + pad, bw, bh)
+                for i, label in enumerate(labels)}
 
-    def _board_sq_rect(self, x, y, board_size=8):
-        sq = self._board_sq_size(board_size)
-        ox, oy = self._board_origin()
-        return pygame.Rect(ox + x * sq, oy + y * sq, sq, sq)
-
-    def _board_sq_from_pixel(self, px, py, board_size=8):
-        """Return (x, y) board coordinate for pixel (px, py), or None if outside."""
-        sq = self._board_sq_size(board_size)
-        ox, oy = self._board_origin()
-        bx = (px - ox) // sq
-        by = (py - oy) // sq
-        if 0 <= bx < board_size and 0 <= by < board_size:
+    def _board_sq_from_pixel(self, px, py):
+        g = self._gfx
+        ox = g.frame_size
+        oy = g.board_y_offset + g.frame_size
+        bx = (px - ox) // max(g.square_size, 1)
+        by = (py - oy) // max(g.square_size, 1)
+        if 0 <= bx < g.board_size and 0 <= by < g.board_size:
             return (bx, by)
         return None
 
-    def _palette_rects(self, board_size=8):
-        """Return list of (color_str, piece_type, pygame.Rect) for the palette.
-        The last entry is the hole tool: ('hole', 'hole', rect).
-        """
-        px = self._panel_x(board_size)
-        pw = self.w - px - self.PADDING
-        if self._portrait:
-            # Two-column grid: white pieces left, black pieces right
-            col_w = (pw - self.PADDING) // 2
-            item_h = 28
-            gap = 3
-            rects = []
-            pal_y = self._panel_top_y(board_size) + 28  # below "Palette" label
-            for i, piece_type in enumerate(self.PALETTE_PIECES):
-                y = pal_y + i * (item_h + gap)
-                rects.append(('white', piece_type, pygame.Rect(px, y, col_w, item_h)))
-                rects.append(('black', piece_type, pygame.Rect(px + col_w + self.PADDING, y, col_w, item_h)))
-            # Hole: full-width row below
-            y = pal_y + len(self.PALETTE_PIECES) * (item_h + gap) + gap * 2
-            rects.append(('hole', 'hole', pygame.Rect(px, y, pw, item_h)))
-            return rects
-        else:
-            item_h = 30
-            gap    = 4
-            rects  = []
-            y = 44 + 32  # below "Palette" label
-            for color_str in ('white', 'black'):
-                for piece_type in self.PALETTE_PIECES:
-                    rects.append((color_str, piece_type,
-                                   pygame.Rect(px, y, pw, item_h)))
-                    y += item_h + gap
-                y += gap * 3  # extra gap between colour sections
-            # Hole tool — separate section at the bottom of the palette
-            y += gap * 2
-            rects.append(('hole', 'hole', pygame.Rect(px, y, pw, item_h)))
-            return rects
+    def _compute_panel_layout(self, panel_rect, board_size, scroll_y, shade_expanded):
+        """Return a SimpleNamespace of all interactive rects (screen coords) for the panel."""
+        from types import SimpleNamespace
+        L = SimpleNamespace()
+        _s  = min(_ui_scale(self.w, self.h), 1.3)
+        ITEM_H  = max(26, _fz(28, _s))
+        PAL_H   = max(22, _fz(24, _s))
+        GAP     = max(4,  self.PADDING // 2)
+        SGAP    = self.PADDING
+        BTN_W   = max(28, ITEM_H)
+        THM_W   = max(56, _fz(60, _s))
+        THM_H   = max(20, _fz(22, _s))
+        THM_GAP = max(3,  GAP // 2)
+        px  = panel_rect.x + self.PADDING
+        pw  = max(1, panel_rect.width - self.PADDING * 2)
+        pr  = panel_rect.right - self.PADDING
+        y   = GAP  # content-space y relative to panel_rect.y (unscrolled)
 
-    def _button_rects(self, btn_y, btn_h, board_size=8):
-        labels = ['← Back', 'Reset', 'Save', 'Play']
-        pad = self.PADDING
-        if self._portrait:
-            total_w = self.w - pad * 2
-            ox = pad
-        else:
-            sq = self._board_sq_size(board_size)
-            total_w = sq * board_size
-            ox, _ = self._board_origin()
-        per_row = max(1, min(len(labels), (total_w + pad) // (90 + pad)))
-        rows = [labels[i:i + per_row] for i in range(0, len(labels), per_row)]
-        rects = {}
-        for row_idx, row_labels in enumerate(reversed(rows)):
-            y = btn_y - row_idx * (btn_h + pad)
-            bw = (total_w - pad * (len(row_labels) - 1)) // len(row_labels)
-            for col_idx, label in enumerate(row_labels):
-                x = ox + col_idx * (bw + pad)
-                rects[label] = pygame.Rect(x, y, bw, btn_h)
-        return rects
+        def sy(cy):
+            return panel_rect.y + cy - scroll_y
 
-    def _btn_area_h(self, btn_h, board_size=8):
-        labels_count = 4
-        pad = self.PADDING
-        total_w = (self.w - pad * 2) if self._portrait else (self._board_sq_size(board_size) * board_size)
-        per_row = max(1, min(labels_count, (total_w + pad) // (90 + pad)))
-        n_rows = (labels_count + per_row - 1) // per_row
-        return n_rows * btn_h + (n_rows - 1) * pad
+        # Board size row
+        _y = sy(y)
+        L.minus_rect    = pygame.Rect(pr - BTN_W * 2 - GAP, _y, BTN_W, ITEM_H)
+        L.plus_rect     = pygame.Rect(pr - BTN_W,            _y, BTN_W, ITEM_H)
+        L.size_label_y  = _y
+        y += ITEM_H + SGAP
+
+        # Palette (2-column: white left, black right; hole full-width)
+        col_w = max(1, (pw - GAP) // 2)
+        L.palette_rects = []
+        for piece_type in self.PALETTE_PIECES:
+            _y = sy(y)
+            L.palette_rects.append(('white', piece_type,
+                                    pygame.Rect(px, _y, col_w, PAL_H)))
+            L.palette_rects.append(('black', piece_type,
+                                    pygame.Rect(px + col_w + GAP, _y, col_w, PAL_H)))
+            y += PAL_H + GAP // 2
+        _y = sy(y)
+        L.palette_rects.append(('hole', 'hole', pygame.Rect(px, _y, pw, PAL_H)))
+        y += PAL_H + SGAP
+
+        # Preset buttons
+        preset_names = ['Standard 8×8', 'Diamond 8×8', 'Hexagon 12×12']
+        n_pre = len(preset_names)
+        pre_bw = max(1, (pw - GAP * (n_pre - 1)) // n_pre)
+        _y = sy(y)
+        L.preset_rects = {}
+        for i, name in enumerate(preset_names):
+            L.preset_rects[name] = pygame.Rect(px + i * (pre_bw + GAP), _y, pre_bw, PAL_H)
+        y += PAL_H + SGAP
+
+        # Board theme row
+        L.board_theme_label_y = sy(y)
+        y += THM_H // 2
+        _y = sy(y)
+        L.theme_rects = {}
+        for i, name in enumerate(BOARD_THEMES):
+            L.theme_rects[('board', name)] = pygame.Rect(
+                px + i * (THM_W + THM_GAP), _y, THM_W, THM_H)
+        y += THM_H + GAP
+
+        # Piece theme row
+        L.piece_theme_label_y = sy(y)
+        y += THM_H // 2
+        _y = sy(y)
+        for i, name in enumerate(PIECE_THEMES):
+            L.theme_rects[('piece', name)] = pygame.Rect(
+                px + i * (THM_W + THM_GAP), _y, THM_W, THM_H)
+        y += THM_H + SGAP
+
+        # Shade toggle button
+        _y = sy(y)
+        L.shade_toggle_rect = pygame.Rect(px, _y, pw, ITEM_H)
+        y += ITEM_H + GAP
+
+        # Shade rows (only when expanded)
+        L.shade_rects = []
+        if shade_expanded:
+            btn_ws = max(20, pw // 9)
+            sw_w   = max(18, pw // 7)
+            for _ in range(len(self._SHADE_CONTROLS)):
+                _y = sy(y)
+                cy = _y + 11
+                mr  = pygame.Rect(pr - btn_ws * 2 - sw_w - 8, cy - 11, btn_ws, 22)
+                sr  = pygame.Rect(mr.right + 4,                cy -  9, sw_w,   18)
+                pr2 = pygame.Rect(sr.right + 4,                cy - 11, btn_ws, 22)
+                L.shade_rects.append((mr, sr, pr2))
+                y += 22 + GAP
+
+        L.total_content_h = y + GAP
+        L.ITEM_H  = ITEM_H;  L.PAL_H  = PAL_H;  L.GAP   = GAP
+        L.SGAP    = SGAP;    L.BTN_W  = BTN_W;  L.THM_W = THM_W
+        L.THM_H   = THM_H;  L.THM_GAP = THM_GAP; L.px   = px;  L.pw = pw
+        return L
 
     # ------------------------------------------------------------------
     # Public entry point
     # ------------------------------------------------------------------
 
     def run(self):
-        """
-        Show the editor.  Returns (layout_dict, saved_path, board_theme,
-        piece_theme, custom_board, custom_piece).
-        """
+        """Show the editor. Returns (layout_dict, saved_path, board_theme,
+        piece_theme, custom_board, custom_piece)."""
         layout = self._load_or_default()
         selected = ('white', 'pawn')
         saved_path = None
         status_msg = ''
         status_until = 0
+        scroll_y = 0
+        shade_expanded = False
         clock = pygame.time.Clock()
 
         while True:
             board_size = layout.get('board_size', 8)
+            self._current_board_size = board_size
+            if self._gfx.board_size != board_size:
+                self._gfx.set_board_size(board_size)
+                self._reload_icons()
             mouse = pygame.mouse.get_pos()
-            btn_h  = 40
-            btn_y  = self._btn_y(board_size)
-
-            # Pre-compute panel geometry (needed for shade rects)
-            px_th = self._panel_x(board_size)
-            pw_th = self.w - px_th - self.PADDING
-            pal_items = self._palette_rects(board_size)
-            theme_start_y = pal_items[-1][2].bottom + 10 if pal_items else 44 + 10
-            theme_rects_map = self._theme_rects(px_th, pw_th, theme_start_y)
-            # shade section starts just below the theme section
-            if theme_rects_map:
-                last_tr = max(r.bottom for r in theme_rects_map.values())
-                shade_start_y = last_tr + 12
-            else:
-                shade_start_y = theme_start_y + 100
-            shade_rects = self._shade_rects(px_th, pw_th, shade_start_y)
+            panel_rect = self._panel_rect()
+            bar_btns   = self._bar_btn_rects()
+            L = self._compute_panel_layout(panel_rect, board_size, scroll_y, shade_expanded)
+            max_scroll = max(0, L.total_content_h - panel_rect.height)
+            scroll_y = min(scroll_y, max_scroll)
 
             for event in pygame.event.get():
                 if event.type == locals.QUIT:
@@ -1861,19 +1929,25 @@ class BoardLayoutEditor:
 
                 _sz = _resize_event_size(event)
                 if _sz:
-                    self._reinit_display(*_sz)
-                    self._reload_icons()
+                    self._reinit_display(*_sz, set_mode=_resize_needs_set_mode(event))
+                    self._gfx.board_theme = self.board_theme
+                    self._gfx.piece_theme = self.piece_theme
+                    scroll_y = 0
                     continue
 
                 if event.type == locals.KEYDOWN and event.key == locals.K_ESCAPE:
                     return (layout, saved_path, self.board_theme, self.piece_theme,
                             self.custom_board, self.custom_piece)
 
+                if event.type == pygame.MOUSEWHEEL:
+                    if panel_rect.collidepoint(*mouse):
+                        scroll_y = max(0, min(scroll_y - event.y * 20, max_scroll))
+
                 if event.type == locals.MOUSEBUTTONDOWN:
                     mx, my = event.pos
 
                     # Board click: place/remove piece or toggle hole
-                    sq_coord = self._board_sq_from_pixel(mx, my, board_size)
+                    sq_coord = self._board_sq_from_pixel(mx, my)
                     if sq_coord is not None:
                         bx, by = sq_coord
                         cell = layout['matrix'][bx][by]
@@ -1895,52 +1969,53 @@ class BoardLayoutEditor:
                                         'has_moved': False,
                                     }
 
-                    # Board size +/- buttons
-                    minus_rect, plus_rect = self._size_rects(board_size)
-                    if minus_rect.collidepoint(mx, my) and board_size > self.MIN_BOARD_SIZE:
-                        layout = self._resize_layout(layout, board_size - 1)
-                        status_msg = f'Board size: {board_size - 1}×{board_size - 1}'
-                        status_until = pygame.time.get_ticks() + 2000
-                    elif plus_rect.collidepoint(mx, my) and board_size < self.MAX_BOARD_SIZE:
-                        layout = self._resize_layout(layout, board_size + 1)
-                        status_msg = f'Board size: {board_size + 1}×{board_size + 1}'
-                        status_until = pygame.time.get_ticks() + 2000
+                    # Panel clicks
+                    if panel_rect.collidepoint(mx, my):
+                        if L.minus_rect.collidepoint(mx, my) and board_size > self.MIN_BOARD_SIZE:
+                            layout = self._resize_layout(layout, board_size - 1)
+                            status_msg = f'Board size: {board_size - 1}×{board_size - 1}'
+                            status_until = pygame.time.get_ticks() + 2000
+                        elif L.plus_rect.collidepoint(mx, my) and board_size < self.MAX_BOARD_SIZE:
+                            layout = self._resize_layout(layout, board_size + 1)
+                            status_msg = f'Board size: {board_size + 1}×{board_size + 1}'
+                            status_until = pygame.time.get_ticks() + 2000
 
-                    # Palette click
-                    for color_str, piece_type, rect in pal_items:
+                        for color_str, piece_type, rect in L.palette_rects:
+                            if rect.collidepoint(mx, my):
+                                selected = 'hole' if color_str == 'hole' else (color_str, piece_type)
+
+                        for preset_name, rect in L.preset_rects.items():
+                            if rect.collidepoint(mx, my):
+                                layout = self._make_preset(preset_name)
+                                status_msg = f'Loaded preset: {preset_name}'
+                                status_until = pygame.time.get_ticks() + 2500
+
+                        for (kind, name), rect in L.theme_rects.items():
+                            if rect.collidepoint(mx, my):
+                                if kind == 'board':
+                                    self.board_theme = name
+                                    self.custom_board = None
+                                    self._gfx.board_theme = name
+                                else:
+                                    self.piece_theme = name
+                                    self.custom_piece = None
+                                    self._gfx.piece_theme = name
+                                    self._reload_icons()
+                                self._save_theme_file()
+
+                        if L.shade_toggle_rect.collidepoint(mx, my):
+                            shade_expanded = not shade_expanded
+
+                        for i, (mr, sr, pr) in enumerate(L.shade_rects):
+                            if mr.collidepoint(mx, my):
+                                self._apply_shade_delta(i, -self.SHADE_STEP)
+                            elif pr.collidepoint(mx, my):
+                                self._apply_shade_delta(i, +self.SHADE_STEP)
+
+                    # Bottom bar clicks
+                    for label, rect in bar_btns.items():
                         if rect.collidepoint(mx, my):
-                            selected = 'hole' if color_str == 'hole' else (color_str, piece_type)
-
-                    # Preset button clicks
-                    for preset_name, rect in self._preset_rects(btn_y, btn_h, board_size).items():
-                        if rect.collidepoint(mx, my):
-                            layout = self._make_preset(preset_name)
-                            status_msg = f'Loaded preset: {preset_name}'
-                            status_until = pygame.time.get_ticks() + 2500
-
-                    # Theme selector clicks — reset custom shades when theme changes
-                    for (kind, name), rect in theme_rects_map.items():
-                        if rect.collidepoint(mx, my):
-                            if kind == 'board':
-                                self.board_theme = name
-                                self.custom_board = None
-                            else:
-                                self.piece_theme = name
-                                self.custom_piece = None
-                                self._reload_icons()
-                            self._save_theme_file()
-
-                    # Shade +/- clicks
-                    for i, (mr, sr, pr) in enumerate(shade_rects):
-                        if mr.collidepoint(mx, my):
-                            self._apply_shade_delta(i, -self.SHADE_STEP)
-                        elif pr.collidepoint(mx, my):
-                            self._apply_shade_delta(i, +self.SHADE_STEP)
-
-                    # Button clicks
-                    for label, rect in self._button_rects(btn_y, btn_h, board_size).items():
-                        if rect.collidepoint(mx, my):
-                            if label == '← Back':
+                            if label == 'Back':
                                 return (layout, saved_path, self.board_theme,
                                         self.piece_theme, self.custom_board, self.custom_piece)
                             elif label == 'Reset':
@@ -1958,10 +2033,9 @@ class BoardLayoutEditor:
                                 return (layout, saved_path, self.board_theme,
                                         self.piece_theme, self.custom_board, self.custom_piece)
 
-            self._draw(layout, selected, mouse, btn_y, btn_h,
+            self._draw(layout, selected, mouse, scroll_y, shade_expanded,
                        status_msg if pygame.time.get_ticks() < status_until else '',
-                       shade_rects, shade_start_y, px_th, pw_th,
-                       theme_rects_map, theme_start_y)
+                       panel_rect, bar_btns, L)
             pygame.display.update()
             clock.tick(60)
 
@@ -1970,45 +2044,17 @@ class BoardLayoutEditor:
     # ------------------------------------------------------------------
 
     def _default_layout(self):
-        """Return the standard chess starting position as a layout dict."""
         return _preset_standard()
 
     def _make_preset(self, name):
-        """Return a preset layout dict by name."""
         if name == 'Diamond 8×8':
             return _preset_diamond()
         elif name == 'Hexagon 12×12':
             return _preset_hexagon()
         return _preset_standard()
 
-    def _btn_y(self, board_size=8):
-        """Return the y-pixel of the action buttons row (consistent with run())."""
-        btn_h = 40
-        return self.h - self._btn_area_h(btn_h, board_size) - self.PADDING
-
-    MIN_BOARD_SIZE = 4
-    MAX_BOARD_SIZE = 12
-
-    def _size_rects(self, board_size=8):
-        """Return (minus_rect, plus_rect) for the board-size +/- buttons in the panel."""
-        px = self._panel_x(board_size)
-        pw = self.w - px - self.PADDING
-        btn_w = 28
-        if self._portrait:
-            y = self._panel_top_y(board_size) + 6
-        else:
-            y = 44 + 6   # near top of panel, same baseline as palette header
-        minus_rect = pygame.Rect(px + pw - btn_w * 2 - 4, y, btn_w, 22)
-        plus_rect  = pygame.Rect(px + pw - btn_w,          y, btn_w, 22)
-        return minus_rect, plus_rect
-
     @staticmethod
     def _resize_layout(layout, new_size):
-        """
-        Return a new layout dict with board_size=new_size.
-        Cells within the new bounds are preserved; cells outside are dropped.
-        New cells (expanded rows/columns) are filled with None.
-        """
         old_size = layout.get('board_size', 8)
         old_matrix = layout['matrix']
         new_matrix = []
@@ -2020,31 +2066,8 @@ class BoardLayoutEditor:
                 else:
                     col.append(None)
             new_matrix.append(col)
-        return {
-            'board_size': new_size,
-            'matrix': new_matrix,
-            'en_passant_target': None,
-            'promotion_pending': None,
-        }
-
-    def _preset_rects(self, btn_y, btn_h, board_size=8):
-        """Return dict of preset_name → pygame.Rect, above the bottom buttons."""
-        names = ['Standard 8×8', 'Diamond 8×8', 'Hexagon 12×12']
-        if self._portrait:
-            ox = self.PADDING
-            total_w = self.w - self.PADDING * 2
-        else:
-            sq = self._board_sq_size(board_size)
-            ox, _ = self._board_origin()
-            total_w = sq * board_size
-        preset_btn_h = 32
-        preset_y = btn_y - preset_btn_h - self.PADDING
-        bw = (total_w - self.PADDING * (len(names) - 1)) // len(names)
-        rects = {}
-        for i, name in enumerate(names):
-            x = ox + i * (bw + self.PADDING)
-            rects[name] = pygame.Rect(x, preset_y, bw, preset_btn_h)
-        return rects
+        return {'board_size': new_size, 'matrix': new_matrix,
+                'en_passant_target': None, 'promotion_pending': None}
 
     def _load_or_default(self):
         if os.path.exists(_CUSTOM_LAYOUT_PATH):
@@ -2076,7 +2099,7 @@ class BoardLayoutEditor:
 
     def _draw_pixel_btn(self, surf, rect, base_color, hovered, text, font, text_color,
                         bevel=2, icon=None):
-        """Draw a pixel-art bevelled button (square corners, bright top/left, dark bottom/right)."""
+        """Pixel-art bevelled button (square corners, bright top/left, dark bottom/right)."""
         bg = tuple(min(c + 30, 255) for c in base_color) if hovered else base_color
         hi = tuple(min(c + 55, 255) for c in base_color)
         lo = tuple(max(c - 25,   0) for c in base_color)
@@ -2087,298 +2110,245 @@ class BoardLayoutEditor:
         pygame.draw.line(surf, lo, rect.topright,   rect.bottomright, bevel)
         if icon or text:
             icn_sz = rect.height - 10 if icon else 0
-            # Use container-aware font so text always fits the button height
             _btn_font = _fit_font(rect.height - 6)
             lbl_surf = _btn_font.render(text, True, text_color) if text else None
             shd_surf = _btn_font.render(text, True, (0, 0, 0))  if text else None
             lbl_w = lbl_surf.get_width() if lbl_surf else 0
-            gap = 4 if (icon and text) else 0
-            total_w = icn_sz + gap + lbl_w
+            gap_i = 4 if (icon and text) else 0
+            total_w = icn_sz + gap_i + lbl_w
             ix = rect.centerx - total_w // 2 + icn_sz // 2
-            tx = rect.centerx - total_w // 2 + icn_sz + gap
+            tx = rect.centerx - total_w // 2 + icn_sz + gap_i
             if icon:
                 _draw_icon(surf, icon, ix, rect.centery, icn_sz, text_color)
             if lbl_surf:
                 surf.blit(shd_surf, shd_surf.get_rect(midleft=(tx + 1, rect.centery + 1)))
                 surf.blit(lbl_surf, lbl_surf.get_rect(midleft=(tx,     rect.centery)))
 
-    def _theme_rects(self, panel_x, panel_w, start_y):
-        """Return dict of (kind, name) → pygame.Rect for theme selector buttons."""
-        bw, bh, gap = 64, 22, 4
-        rects = {}
-        # Board theme row
-        y = start_y + 20
-        for i, name in enumerate(BOARD_THEMES):
-            x = panel_x + i * (bw + gap)
-            rects[('board', name)] = pygame.Rect(x, y, bw, bh)
-        # Piece theme row
-        y += bh + gap + 20
-        for i, name in enumerate(PIECE_THEMES):
-            x = panel_x + i * (bw + gap)
-            rects[('piece', name)] = pygame.Rect(x, y, bw, bh)
-        return rects
-
-    def _draw(self, layout, selected, mouse, btn_y, btn_h, status_msg,
-              shade_rects, shade_start_y, _panel_x_unused, _panel_w_unused,
-              theme_rects_map, theme_start_y):
+    def _draw(self, layout, selected, mouse, scroll_y, shade_expanded, status_msg,
+              panel_rect, bar_btns, L):
         board_size = layout.get('board_size', 8)
-        self.screen.fill(self.BG)
+        g  = self._gfx
+        g.screen = self.screen
+        t  = self.custom_board if self.custom_board else BOARD_THEMES[self.board_theme]
 
-        # Header bar with title + keystroke hint, separated from content by a line
-        hdr = self.HEADER_H
-        pygame.draw.rect(self.screen, (16, 12, 32), (0, 0, self.w, hdr))
-        pygame.draw.line(self.screen, self.HIGH, (0, hdr - 1), (self.w, hdr - 1), 1)
-        shd = self.title_font.render('Board Layout Editor', True, (0, 0, 0))
-        title = self.title_font.render('Board Layout Editor', True, self.TITLE_COLOR)
-        ty = hdr // 2 - title.get_height() // 2
-        self.screen.blit(shd,   (self.PADDING + 1, ty + 1))
-        self.screen.blit(title, (self.PADDING,      ty))
-        hint = self.tiny_font.render('L-click: place  •  R-click: clear  •  Esc: back',
-                                     True, self.DIM_TEXT)
-        self.screen.blit(hint, hint.get_rect(right=self.w - self.PADDING,
-                                             centery=hdr // 2))
+        # 1. Board frame (fills screen dark, draws border + coord labels via Graphics)
+        g.draw_board_frame()
 
-        sq = self._board_sq_size(board_size)
-        ox, oy = self._board_origin()
-        t = self.custom_board if self.custom_board else BOARD_THEMES[self.board_theme]
-
-        # Pixel art frame around board: teal outer + dark inner + corner accents
-        board_px = sq * board_size
-        pygame.draw.rect(self.screen, Colours.HIGH,  (ox - 5, oy - 5, board_px + 10, board_px + 10), 3)
-        pygame.draw.rect(self.screen, (30, 25, 55),  (ox - 2, oy - 2, board_px +  4, board_px +  4), 2)
-        for cx_off, cy_off in [(0,0),(board_px+4,0),(0,board_px+4),(board_px+4,board_px+4)]:
-            pygame.draw.rect(self.screen, Colours.HIGH, (ox - 5 + cx_off, oy - 5 + cy_off, 6, 6))
-
-        # Coordinate labels around the board (pixel art style with drop shadow)
-        lbl_font = pygame.font.Font('freesansbold.ttf', max(sq // 4, 10))
-        files = 'abcdefghijklmnopqrstuvwxyz'[:board_size]
-        for i, ch in enumerate(files):
-            cx = ox + i * sq + sq // 2
-            shd_s = lbl_font.render(ch, True, (0, 0, 0))
-            lbl_s = lbl_font.render(ch, True, Colours.GOLD)
-            r = lbl_s.get_rect(centerx=cx, centery=oy - 12)
-            self.screen.blit(shd_s, r.move(1, 1))
-            self.screen.blit(lbl_s, r)
-        for i in range(board_size):
-            cy = oy + i * sq + sq // 2
-            ch = str(board_size - i)
-            shd_s = lbl_font.render(ch, True, (0, 0, 0))
-            lbl_s = lbl_font.render(ch, True, Colours.GOLD)
-            r = lbl_s.get_rect(centerx=ox - 12, centery=cy)
-            self.screen.blit(shd_s, r.move(1, 1))
-            self.screen.blit(lbl_s, r)
-
-        # Board squares with board-theme bevel
-        _bevel = max(2, sq // 16)
-        sq_coord_hover = self._board_sq_from_pixel(*mouse, board_size)
+        # 2. Board squares (editor custom drawing using _gfx dimensions)
+        sq  = g.square_size
+        ox  = g.frame_size
+        oy  = g.board_y_offset + g.frame_size
+        _bv = max(2, sq // 16)
+        sq_hover = self._board_sq_from_pixel(*mouse)
         for x in range(board_size):
-            for y in range(board_size):
-                cell = layout['matrix'][x][y]
-                rect = self._board_sq_rect(x, y, board_size)
-                hovering = sq_coord_hover == (x, y)
+            for yi in range(board_size):
+                cell = layout['matrix'][x][yi]
+                rect = pygame.Rect(ox + x * sq, oy + yi * sq, sq, sq)
+                hov  = sq_hover == (x, yi)
                 if cell == 'hole':
                     pygame.draw.rect(self.screen, t['hole'], rect)
-                    pygame.draw.rect(self.screen, t['hole_lo'], (rect.x, rect.y, rect.w, _bevel))
-                    pygame.draw.rect(self.screen, t['hole_lo'], (rect.x, rect.y, _bevel, rect.h))
-                    pygame.draw.rect(self.screen, t['hole_hi'], (rect.x, rect.y + rect.h - _bevel, rect.w, _bevel))
-                    pygame.draw.rect(self.screen, t['hole_hi'], (rect.x + rect.w - _bevel, rect.y, _bevel, rect.h))
+                    pygame.draw.rect(self.screen, t['hole_lo'], (rect.x, rect.y, rect.w, _bv))
+                    pygame.draw.rect(self.screen, t['hole_lo'], (rect.x, rect.y, _bv, rect.h))
+                    pygame.draw.rect(self.screen, t['hole_hi'], (rect.x, rect.y + rect.h - _bv, rect.w, _bv))
+                    pygame.draw.rect(self.screen, t['hole_hi'], (rect.x + rect.w - _bv, rect.y, _bv, rect.h))
                 else:
-                    is_light = (x + y) % 2 == 0
-                    base_color = t['light'] if is_light else t['dark']
-                    if hovering:
-                        base_color = tuple(min(c + 30, 255) for c in base_color)
+                    is_light = (x + yi) % 2 == 0
+                    bc = t['light'] if is_light else t['dark']
+                    if hov:
+                        bc = tuple(min(c + 30, 255) for c in bc)
                     hi = t['light_hi'] if is_light else t['dark_hi']
                     lo = t['light_lo'] if is_light else t['dark_lo']
-                    pygame.draw.rect(self.screen, base_color, rect)
-                    pygame.draw.rect(self.screen, hi, (rect.x, rect.y, rect.w, _bevel))
-                    pygame.draw.rect(self.screen, hi, (rect.x, rect.y, _bevel, rect.h))
-                    pygame.draw.rect(self.screen, lo, (rect.x, rect.y + rect.h - _bevel, rect.w, _bevel))
-                    pygame.draw.rect(self.screen, lo, (rect.x + rect.w - _bevel, rect.y, _bevel, rect.h))
-
-        # Pixel art grid lines between squares
+                    pygame.draw.rect(self.screen, bc, rect)
+                    pygame.draw.rect(self.screen, hi, (rect.x, rect.y, rect.w, _bv))
+                    pygame.draw.rect(self.screen, hi, (rect.x, rect.y, _bv, rect.h))
+                    pygame.draw.rect(self.screen, lo, (rect.x, rect.y + rect.h - _bv, rect.w, _bv))
+                    pygame.draw.rect(self.screen, lo, (rect.x + rect.w - _bv, rect.y, _bv, rect.h))
+        board_px = sq * board_size
         sep = (8, 8, 18)
         for i in range(1, board_size):
             pygame.draw.line(self.screen, sep, (ox + i*sq, oy), (ox + i*sq, oy + board_px))
             pygame.draw.line(self.screen, sep, (ox, oy + i*sq), (ox + board_px, oy + i*sq))
 
-        # Board pieces
+        # 3. Board pieces
         piece_labels = {'pawn': 'P', 'rook': 'R', 'knight': 'N',
                         'bishop': 'B', 'queen': 'Q', 'king': 'K'}
         for x in range(board_size):
-            for y in range(board_size):
-                cell = layout['matrix'][x][y]
+            for yi in range(board_size):
+                cell = layout['matrix'][x][yi]
                 if cell is None or cell == 'hole':
                     continue
-                rect = self._board_sq_rect(x, y, board_size)
-                cx, cy = rect.centerx, rect.centery
+                cx = ox + x * sq + sq // 2
+                cy = oy + yi * sq + sq // 2
                 color_key = cell['color']
-                icon = self.piece_icons.get((cell['piece_type'], color_key))
+                icon = g.piece_icons.get((cell['piece_type'], color_key))
                 if icon:
-                    icon_scaled = pygame.transform.smoothscale(icon, (sq - 6, sq - 6))
-                    self.screen.blit(icon_scaled, icon_scaled.get_rect(center=(cx, cy)))
+                    scaled = pygame.transform.smoothscale(icon, (sq - 6, sq - 6))
+                    self.screen.blit(scaled, scaled.get_rect(center=(cx, cy)))
                 else:
                     c = Colours.WHITE if color_key == 'white' else Colours.PIECE_BLACK
-                    r = sq // 2 - 2
-                    pygame.draw.circle(self.screen, c, (cx, cy), r)
+                    r2 = sq // 2 - 2
+                    pygame.draw.circle(self.screen, c, (cx, cy), r2)
                     outline = Colours.BLACK if color_key == 'white' else Colours.WHITE
-                    pygame.draw.circle(self.screen, outline, (cx, cy), r, 2)
-                    lbl = self.small_font.render(piece_labels.get(cell['piece_type'], '?'),
-                                                 True, outline)
+                    pygame.draw.circle(self.screen, outline, (cx, cy), r2, 2)
+                    lbl = self.small_font.render(
+                        piece_labels.get(cell['piece_type'], '?'), True, outline)
                     self.screen.blit(lbl, lbl.get_rect(center=(cx, cy)))
 
-        # Panel — pixel art frame + palette + themes
-        px = self._panel_x(board_size)
-        pw = self.w - px - self.PADDING
-        if self._portrait:
-            panel_top = self._panel_top_y(board_size)
-            panel_rect = pygame.Rect(self.PADDING // 2, panel_top,
-                                     self.w - self.PADDING, btn_y - panel_top - self.PADDING)
-        else:
-            panel_rect = pygame.Rect(px - self.PADDING // 2, oy - 2,
-                                     pw + self.PADDING, btn_y - oy + 2 - self.PADDING)
-        pygame.draw.rect(self.screen, self.PANEL_BG, panel_rect, border_radius=0)
-        pygame.draw.rect(self.screen, Colours.HIGH,  panel_rect, 2)
-        pygame.draw.rect(self.screen, (30, 25, 55),  panel_rect.inflate(-4, -4), 1)
+        # 4. Header (drawn on top of board frame)
+        hdr = self.HEADER_H
+        pygame.draw.rect(self.screen, (16, 12, 32), (0, 0, self.w, hdr))
+        pygame.draw.line(self.screen, self.HIGH, (0, hdr - 1), (self.w, hdr - 1), 1)
+        shd_s  = self.title_font.render('Board Layout Editor', True, (0, 0, 0))
+        title  = self.title_font.render('Board Layout Editor', True, self.TITLE_COLOR)
+        ty = hdr // 2 - title.get_height() // 2
+        self.screen.blit(shd_s, (self.PADDING + 1, ty + 1))
+        self.screen.blit(title, (self.PADDING,      ty))
+        hint = self.tiny_font.render('L-click: place  •  R-click: clear  •  Esc: back',
+                                     True, self.DIM_TEXT)
+        self.screen.blit(hint, hint.get_rect(right=self.w - self.PADDING, centery=hdr // 2))
 
-        pal_hdr = self.label_font.render('Palette', True, self.TITLE_COLOR)
-        if self._portrait:
-            self.screen.blit(pal_hdr, (px, self._panel_top_y(board_size) + 6))
-        else:
-            self.screen.blit(pal_hdr, (px, oy + 6))
+        # 5. Panel background
+        pygame.draw.rect(self.screen, self.PANEL_BG, panel_rect)
+        pygame.draw.line(self.screen, self.HIGH, panel_rect.topleft, panel_rect.topright, 1)
 
-        # Board size controls: "Size: N  [−] [+]"
-        minus_rect, plus_rect = self._size_rects(board_size)
-        size_lbl = self.tiny_font.render(f'Size: {board_size}', True, self.TEXT)
-        self.screen.blit(size_lbl, size_lbl.get_rect(
-            centery=minus_rect.centery, right=minus_rect.left - 6))
-        for rect, label, enabled in [
-            (minus_rect, '−', board_size > self.MIN_BOARD_SIZE),
-            (plus_rect,  '+', board_size < self.MAX_BOARD_SIZE),
-        ]:
-            hov = rect.collidepoint(*mouse) and enabled
-            base = self.BTN_HOV if enabled else (45, 48, 58)
-            tc = self.TEXT if enabled else (70, 75, 85)
-            self._draw_pixel_btn(self.screen, rect, base, hov,
-                                 label, self.label_font, tc)
+        # 5a. Panel content with clipping + scroll
+        self.screen.set_clip(panel_rect)
+        px  = L.px
+        GAP = L.GAP
 
-        for color_str, piece_type, rect in self._palette_rects(board_size):
-            is_hole_entry = (color_str == 'hole')
-            is_sel = (selected == 'hole' if is_hole_entry
-                      else selected == (color_str, piece_type))
-            hov    = rect.collidepoint(*mouse)
+        # Board size row
+        sl = self.label_font.render(f'Board size: {board_size}', True, self.TEXT)
+        self.screen.blit(sl, (px, L.size_label_y + 4))
+        for rect, label, enabled in [(L.minus_rect, '−', board_size > self.MIN_BOARD_SIZE),
+                                      (L.plus_rect,  '+', board_size < self.MAX_BOARD_SIZE)]:
+            hov  = rect.collidepoint(*mouse) and enabled
+            base = self.BTN_HOV if hov else (self.BTN_BG if enabled else (35, 35, 45))
+            tc   = self.TEXT if enabled else self.DIM_TEXT
+            self._draw_pixel_btn(self.screen, rect, base, hov, label, self.label_font, tc)
+
+        # Palette header
+        if L.palette_rects:
+            ph_y = L.palette_rects[0][2].y - GAP * 2
+            ph = self.tiny_font.render('PALETTE  (white | black)', True, self.DIM_TEXT)
+            self.screen.blit(ph, (px, ph_y))
+
+        for color_str, piece_type, rect in L.palette_rects:
+            is_hole = color_str == 'hole'
+            is_sel  = (selected == 'hole') if is_hole else selected == (color_str, piece_type)
+            hov     = rect.collidepoint(*mouse)
             if is_sel:
-                bg = self.HIGH
-                tc = (20, 20, 20)
+                bg, tc = self.HIGH, (20, 20, 20)
             elif hov:
-                bg = self.BTN_HOV
-                tc = self.TEXT
+                bg, tc = self.BTN_HOV, self.TEXT
             else:
-                bg = self.BTN_BG
-                tc = self.TEXT
-            # Palette row: pixel art bevel + selected teal border
+                bg, tc = self.BTN_BG, self.TEXT
             self._draw_pixel_btn(self.screen, rect, bg, False, None, None, None)
             if is_sel:
                 pygame.draw.rect(self.screen, Colours.HIGH, rect, 2)
-
-            icon_x = rect.left + 4
-            if is_hole_entry:
-                swatch = pygame.Rect(icon_x, rect.centery - 10, 24, 20)
-                pygame.draw.rect(self.screen, Colours.HOLE, swatch, border_radius=0)
-                pygame.draw.rect(self.screen, (45, 45, 55), swatch.inflate(-6, -6))
-                lbl = self.small_font.render('Hole  (toggle)', True, tc)
+            ix = rect.left + 4
+            if is_hole:
+                sw = pygame.Rect(ix, rect.centery - 8, 20, 16)
+                pygame.draw.rect(self.screen, Colours.HOLE, sw)
+                pygame.draw.rect(self.screen, (45, 45, 55), sw.inflate(-4, -4))
+                lbl_s = self.tiny_font.render('Hole (toggle)', True, tc)
             else:
-                icon = self.piece_icons.get((piece_type, color_str))
+                icon = g.piece_icons.get((piece_type, color_str))
+                icn_h = rect.height - 4
                 if icon:
-                    small = pygame.transform.smoothscale(icon, (24, 24))
-                    self.screen.blit(small, small.get_rect(centery=rect.centery, left=icon_x))
-                lbl_text = f"{color_str}  {piece_type}"
-                lbl = self.small_font.render(lbl_text, True, tc)
-            self.screen.blit(lbl, lbl.get_rect(centery=rect.centery, left=icon_x + 28))
+                    sm_icon = pygame.transform.smoothscale(icon, (icn_h, icn_h))
+                    self.screen.blit(sm_icon, sm_icon.get_rect(centery=rect.centery, left=ix))
+                lbl_s = self.tiny_font.render(
+                    f'{"W" if color_str == "white" else "B"} {piece_type}', True, tc)
+            self.screen.blit(lbl_s, lbl_s.get_rect(centery=rect.centery, left=ix + rect.height))
 
-        # ── Themes panel ─────────────────────────────────────────────────
-        if theme_rects_map:
-            thdr = self.tiny_font.render('BOARD THEME', True, self.TITLE_COLOR)
-            self.screen.blit(thdr, (px, theme_start_y + 2))
-            phdr = self.tiny_font.render('PIECE THEME', True, self.TITLE_COLOR)
-            bh_row = list(BOARD_THEMES.keys())[0]
-            phdr_y = theme_rects_map[('board', bh_row)].bottom + 6
-            self.screen.blit(phdr, (px, phdr_y))
-
-        for (kind, name), rect in theme_rects_map.items():
-            active = (name == self.board_theme if kind == 'board'
-                      else name == self.piece_theme)
-            hov = rect.collidepoint(*mouse)
-            base = (40, 160, 160) if active else self.BTN_BG
-            tc   = (5, 5, 15) if active else self.TEXT
-            self._draw_pixel_btn(self.screen, rect, base, hov,
-                                 name, self.tiny_font, tc)
-            if active:
-                pygame.draw.rect(self.screen, Colours.HIGH, rect, 2)
-
-        # ── Shade controls ────────────────────────────────────────────────
-        shade_hdr = self.tiny_font.render('SHADES  [ - darker   + brighter ]',
-                                          True, self.TITLE_COLOR)
-        if shade_rects:
-            self.screen.blit(shade_hdr, (px, shade_start_y - 14))
-        for i, (label, kind, sub, keys) in enumerate(self._SHADE_CONTROLS) if shade_rects else []:
-            mr, sr, pr = shade_rects[i]
-            # Label
-            ls = self.tiny_font.render(label, True, self.TEXT)
-            self.screen.blit(ls, (px, mr.centery - ls.get_height() // 2))
-            # Swatch colour sample
-            if kind == 'board':
-                bc = self.custom_board if self.custom_board else BOARD_THEMES[self.board_theme]
-                swatch_col = bc[keys[0]]
-            else:
-                pc = self.custom_piece if self.custom_piece else PIECE_THEMES[self.piece_theme]
-                r, g, b = self._hex_to_rgb(pc[sub][keys[0]])
-                swatch_col = (r, g, b)
-            # Minus button
-            hm = mr.collidepoint(*mouse)
-            pygame.draw.rect(self.screen, (60, 30, 30) if hm else (40, 20, 20), mr)
-            pygame.draw.rect(self.screen, (140, 70, 70), mr, 1)
-            ms = self.tiny_font.render('-', True, (220, 140, 140))
-            self.screen.blit(ms, ms.get_rect(center=mr.center))
-            # Colour swatch
-            pygame.draw.rect(self.screen, swatch_col, sr)
-            pygame.draw.rect(self.screen, (70, 70, 100), sr, 1)
-            # Plus button
-            hp = pr.collidepoint(*mouse)
-            pygame.draw.rect(self.screen, (30, 60, 30) if hp else (20, 40, 20), pr)
-            pygame.draw.rect(self.screen, (70, 140, 70), pr, 1)
-            ps = self.tiny_font.render('+', True, (140, 220, 140))
-            self.screen.blit(ps, ps.get_rect(center=pr.center))
-
-        # Preset buttons (row above the action buttons)
-        preset_rects = self._preset_rects(btn_y, btn_h, board_size)
-        preset_lbl = self.tiny_font.render('Presets:', True, self.DIM_TEXT)
-        if preset_rects:
-            first_rect = next(iter(preset_rects.values()))
-            self.screen.blit(preset_lbl, (ox, first_rect.y - 18))
-        for name, rect in preset_rects.items():
+        # Presets
+        if L.preset_rects:
+            first_pr = next(iter(L.preset_rects.values()))
+            pre_hdr = self.tiny_font.render('PRESETS', True, self.DIM_TEXT)
+            self.screen.blit(pre_hdr, (px, first_pr.y - GAP * 2))
+        for name, rect in L.preset_rects.items():
             hov = rect.collidepoint(*mouse)
             self._draw_pixel_btn(self.screen, rect, self.BTN_BG, hov,
                                  name, self.tiny_font, self.TEXT)
 
-        # Bottom action buttons (pixel art bevel with icons)
-        btn_colors = {
-            '← Back': self.BTN_BG,
-            'Reset':   self.BTN_RST,
-            'Save':    self.BTN_SAVE,
-            'Play':    self.BTN_PLAY,
-        }
-        btn_icons = {'← Back': 'back', 'Reset': 'reset', 'Save': 'save', 'Play': 'play'}
-        btn_short = {'← Back': 'Back', 'Reset': 'Reset', 'Save': 'Save', 'Play': 'Play'}
-        for label, rect in self._button_rects(btn_y, btn_h, board_size).items():
-            hov = rect.collidepoint(*mouse)
-            self._draw_pixel_btn(self.screen, rect, btn_colors[label], hov,
-                                 btn_short.get(label, label), self.label_font,
-                                 self.TEXT, icon=btn_icons.get(label))
+        # Theme rows
+        bt_hdr = self.tiny_font.render('BOARD THEME', True, self.DIM_TEXT)
+        self.screen.blit(bt_hdr, (px, L.board_theme_label_y))
+        pt_hdr = self.tiny_font.render('PIECE THEME', True, self.DIM_TEXT)
+        self.screen.blit(pt_hdr, (px, L.piece_theme_label_y))
+        for (kind, name), rect in L.theme_rects.items():
+            active = (name == self.board_theme if kind == 'board' else name == self.piece_theme)
+            hov  = rect.collidepoint(*mouse)
+            base = (40, 160, 160) if active else self.BTN_BG
+            tc   = (5, 5, 15)    if active else self.TEXT
+            self._draw_pixel_btn(self.screen, rect, base, hov, name, self.tiny_font, tc)
+            if active:
+                pygame.draw.rect(self.screen, Colours.HIGH, rect, 2)
 
-        # Status message
+        # Shade toggle
+        tog_text = 'Customise colours ▴' if shade_expanded else 'Customise colours ▾'
+        hov = L.shade_toggle_rect.collidepoint(*mouse)
+        self._draw_pixel_btn(self.screen, L.shade_toggle_rect,
+                             self.BTN_HOV if hov else self.BTN_BG, hov,
+                             tog_text, self.small_font, self.TEXT)
+
+        # Shade rows (only when expanded)
+        if shade_expanded:
+            for i, (label, kind, sub, keys) in enumerate(self._SHADE_CONTROLS):
+                if i >= len(L.shade_rects):
+                    break
+                mr, sr, pr = L.shade_rects[i]
+                ls = self.tiny_font.render(label, True, self.TEXT)
+                self.screen.blit(ls, (px, mr.centery - ls.get_height() // 2))
+                if kind == 'board':
+                    bc2 = self.custom_board if self.custom_board else BOARD_THEMES[self.board_theme]
+                    swatch_col = bc2[keys[0]]
+                else:
+                    pc2 = self.custom_piece if self.custom_piece else PIECE_THEMES[self.piece_theme]
+                    r3, g3, b3 = self._hex_to_rgb(pc2[sub][keys[0]])
+                    swatch_col = (r3, g3, b3)
+                hm = mr.collidepoint(*mouse)
+                pygame.draw.rect(self.screen, (60, 30, 30) if hm else (40, 20, 20), mr)
+                pygame.draw.rect(self.screen, (140, 70, 70), mr, 1)
+                ms = self.tiny_font.render('-', True, (220, 140, 140))
+                self.screen.blit(ms, ms.get_rect(center=mr.center))
+                pygame.draw.rect(self.screen, swatch_col, sr)
+                pygame.draw.rect(self.screen, (70, 70, 100), sr, 1)
+                hp = pr.collidepoint(*mouse)
+                pygame.draw.rect(self.screen, (30, 60, 30) if hp else (20, 40, 20), pr)
+                pygame.draw.rect(self.screen, (70, 140, 70), pr, 1)
+                ps = self.tiny_font.render('+', True, (140, 220, 140))
+                self.screen.blit(ps, ps.get_rect(center=pr.center))
+
+        # Scrollbar
+        if L.total_content_h > panel_rect.height > 0:
+            ratio = panel_rect.height / L.total_content_h
+            sb_h = max(20, int(panel_rect.height * ratio))
+            sb_y = panel_rect.y + int((scroll_y / L.total_content_h) * panel_rect.height)
+            pygame.draw.rect(self.screen, (80, 70, 120),
+                             (panel_rect.right - 4, sb_y, 4, sb_h))
+
+        self.screen.set_clip(None)
+
+        # 6. Bottom bar
+        bar_rect = self._bar_rect()
+        bar_y = bar_rect.y
+        pygame.draw.rect(self.screen, (8, 8, 18), bar_rect)
+        pygame.draw.line(self.screen, (60, 50, 100), (0, bar_y), (self.w, bar_y), 2)
+        pygame.draw.line(self.screen, (20, 15, 40), (0, bar_y + 2), (self.w, bar_y + 2), 1)
+        btn_colors_m = {'Back': self.BTN_BG, 'Reset': self.BTN_RST,
+                        'Save': self.BTN_SAVE, 'Play': self.BTN_PLAY}
+        btn_icons_m  = {'Back': 'back', 'Reset': 'reset', 'Save': 'save', 'Play': 'play'}
+        for label, rect in bar_btns.items():
+            hov = rect.collidepoint(*mouse)
+            self._draw_pixel_btn(self.screen, rect, btn_colors_m[label], hov,
+                                 label, self.label_font, self.TEXT,
+                                 icon=btn_icons_m[label])
+
+        # Status message above bar
         if status_msg:
             sm = self.small_font.render(status_msg, True, Colours.GOLD)
-            self.screen.blit(sm, (ox, btn_y - 22))
+            self.screen.blit(sm, (self.PADDING, bar_y - sm.get_height() - 4))
 
 
 def _make_layout(board_size, matrix):
@@ -2495,9 +2465,7 @@ def _start_menu(screen, w, h):
         L._s = _ui_scale(W, H)
         L.gap = _fz(16, L._s)
         _portrait = H > W * 1.1
-        # All interactive content lives within eff_h = min(W, H) (the square region).
-        # On tall Android screens the dark background fills full H but elements stay square.
-        eff_h = min(W, H)
+        eff_h = min(W, H)   # square region; still used for landscape button y
         _corner_sz = 14 * 4   # _cell * 4, matches corner decoration built below
         if _portrait:
             btn_scale = min(L._s, 1.3)
@@ -2506,8 +2474,9 @@ def _start_menu(screen, w, h):
             x0 = L.gap
             btn_gap = _fz(12, btn_scale)
             btn_area_h = L.bh * 3 + btn_gap * 2
-            L.frame_y = max(L.gap * 2, eff_h // 8)
-            L._btn_bottom_y = eff_h - _corner_sz - 16
+            # Use full screen height H so corners/buttons reach the true bottom on tall phones
+            L.frame_y = max(L.gap * 2, H // 12)
+            L._btn_bottom_y = H - _corner_sz - 16
             y0 = L._btn_bottom_y - btn_gap - btn_area_h
             L.btns = {
                 'Play':        pygame.Rect(x0, y0,                        bw, L.bh),
@@ -2586,7 +2555,10 @@ def _start_menu(screen, w, h):
             _sz = _resize_event_size(event)
             if _sz:
                 w, h = _sz
-                screen = pygame.display.set_mode((w, h), pygame.FULLSCREEN if _android else 0)
+                if _resize_needs_set_mode(event):
+                    screen = pygame.display.set_mode((w, h), pygame.FULLSCREEN if _android else 0)
+                else:
+                    screen = pygame.display.get_surface()
                 L = _build_layout(w, h)
                 continue
             if event.type == pygame.FINGERDOWN:

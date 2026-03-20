@@ -160,6 +160,21 @@ def _fz(base, scale):
     return max(base, int(round(base * scale)))
 
 
+_FONT_CACHE = {}
+
+def _fit_font(max_h, bold=True):
+    """Return a cached Font whose rendered line height fits within max_h pixels.
+
+    freesansbold linesize ≈ size * 1.22, so size = max_h / 1.22.
+    Use this wherever text must fit inside a fixed-height container (e.g. buttons).
+    """
+    size = max(6, int(max_h / 1.22))
+    key = (size, bold)
+    if key not in _FONT_CACHE:
+        _FONT_CACHE[key] = pygame.font.Font('freesansbold.ttf' if bold else None, size)
+    return _FONT_CACHE[key]
+
+
 class Game:
 
     def __init__(self):
@@ -544,9 +559,10 @@ class Graphics:
             pygame.draw.line(self.screen, bhi, rect.topleft,    rect.bottomleft,  BEVEL)
             pygame.draw.line(self.screen, blo, rect.bottomleft, rect.bottomright, BEVEL)
             pygame.draw.line(self.screen, blo, rect.topright,   rect.bottomright, BEVEL)
-            # Icon + label centred in button
-            text_s   = _pixel_text(label, _fz(16, self._s), tc, bold=True)
-            shadow_s = _pixel_text(label, _fz(16, self._s), (0, 0, 0), bold=True)
+            # Icon + label centred in button — text sized to button height (not screen scale)
+            _btn_text_sz = max(10, self.button_bar_height * 2 // 5)
+            text_s   = _pixel_text(label, _btn_text_sz, tc,      bold=True)
+            shadow_s = _pixel_text(label, _btn_text_sz, (0,0,0), bold=True)
             total_w = ICN + 4 + text_s.get_width()
             ix = rect.centerx - total_w // 2 + ICN // 2
             tx = rect.centerx - total_w // 2 + ICN + 4
@@ -987,7 +1003,7 @@ class PieceEditor:
         pygame.display.set_caption('megaChess — piece editor')
         self._piece_names_cache = []
         _raw = _ui_scale(self.w, self.h)
-        _font_s   = min(_raw, 1.5)   # fonts: slightly larger for readability
+        _font_s   = min(_raw, 2.0)   # fonts scale up to 2× — buttons stay safe via _fit_font
         _layout_s = min(_raw, 1.3)   # layout: compact so text fits in buttons
         self.title_font = pygame.font.Font('freesansbold.ttf', _fz(32, _font_s))
         self.label_font = pygame.font.Font('freesansbold.ttf', _fz(22, _font_s))
@@ -1293,8 +1309,10 @@ class PieceEditor:
         pygame.draw.line(surf, lo, rect.topright,   rect.bottomright, bevel)
         if icon or text:
             icn_sz = rect.height - 10 if icon else 0
-            lbl_surf = font.render(text, True, text_color) if text else None
-            shd_surf = font.render(text, True, (0, 0, 0))  if text else None
+            # Use container-aware font so text always fits the button height
+            _btn_font = _fit_font(rect.height - 6)
+            lbl_surf = _btn_font.render(text, True, text_color) if text else None
+            shd_surf = _btn_font.render(text, True, (0, 0, 0))  if text else None
             lbl_w = lbl_surf.get_width() if lbl_surf else 0
             gap = 4 if (icon and text) else 0
             total_w = icn_sz + gap + lbl_w
@@ -1542,7 +1560,7 @@ class BoardLayoutEditor:
         self.screen = pygame.display.set_mode((self.w, self.h), _flags)
         pygame.display.set_caption('megaChess — board layout editor')
         _raw = _ui_scale(self.w, self.h)
-        _font_s   = min(_raw, 1.5)   # fonts: slightly larger for readability
+        _font_s   = min(_raw, 2.0)   # fonts scale up to 2× — buttons stay safe via _fit_font
         _layout_s = min(_raw, 1.3)   # layout: compact so text fits in buttons
         self.title_font = pygame.font.Font('freesansbold.ttf', _fz(28, _font_s))
         self.label_font = pygame.font.Font('freesansbold.ttf', _fz(18, _font_s))
@@ -2026,8 +2044,10 @@ class BoardLayoutEditor:
         pygame.draw.line(surf, lo, rect.topright,   rect.bottomright, bevel)
         if icon or text:
             icn_sz = rect.height - 10 if icon else 0
-            lbl_surf = font.render(text, True, text_color) if text else None
-            shd_surf = font.render(text, True, (0, 0, 0))  if text else None
+            # Use container-aware font so text always fits the button height
+            _btn_font = _fit_font(rect.height - 6)
+            lbl_surf = _btn_font.render(text, True, text_color) if text else None
+            shd_surf = _btn_font.render(text, True, (0, 0, 0))  if text else None
             lbl_w = lbl_surf.get_width() if lbl_surf else 0
             gap = 4 if (icon and text) else 0
             total_w = icn_sz + gap + lbl_w
@@ -2598,8 +2618,9 @@ def _start_menu(screen, w, h):
             pygame.draw.line(screen, blo, rect.bottomleft, rect.bottomright, BEVEL)
             pygame.draw.line(screen, blo, rect.topright,   rect.bottomright, BEVEL)
             short = _label_map.get(label, label)
-            shadow_s = _pixel_text(short, _fz(14, min(_s, 1.5)), (0, 0, 0), bold=True)
-            txt_s    = _pixel_text(short, _fz(14, min(_s, 1.5)), tc,         bold=True)
+            _btn_text_sz = max(10, bh * 2 // 5)
+            shadow_s = _pixel_text(short, _btn_text_sz, (0, 0, 0), bold=True)
+            txt_s    = _pixel_text(short, _btn_text_sz, tc,         bold=True)
             total_w = ICN + 6 + txt_s.get_width()
             ix = rect.centerx - total_w // 2 + ICN // 2
             tx = rect.centerx - total_w // 2 + ICN + 6

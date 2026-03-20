@@ -47,6 +47,20 @@ def _on_android():
     )
 
 
+def _resize_event_size(event):
+    """Return (w, h) from a pygame resize event, or None if the event is not a resize.
+
+    Handles both pygame 1.x VIDEORESIZE (.w/.h) and pygame 2.x WINDOWRESIZED (.x/.y)
+    so orientation-change code works across both versions.
+    """
+    if event.type == pygame.VIDEORESIZE:
+        return event.w, event.h
+    _wre = getattr(pygame, 'WINDOWRESIZED', None)
+    if _wre is not None and event.type == _wre:
+        return event.x, event.y
+    return None
+
+
 def _pixel_text(text, size, color, bold=False):
     """Return a pygame Surface with genuine pixel-art text.
     Renders at half size with no antialiasing, then scales up 2x with
@@ -214,6 +228,12 @@ class Game:
             if event.type == locals.QUIT:
                 self.terminate_game()
 
+            _sz = _resize_event_size(event)
+            if _sz:
+                self.graphics._reinit_layout(*_sz)
+                self.graphics.load_piece_icons(self.board.pieces_defs)
+                continue
+
             if event.type == locals.KEYDOWN:
                 if event.key == locals.K_ESCAPE:
                     self._quit_to_menu = True
@@ -377,44 +397,47 @@ class Graphics:
         self.fps = 60
         self.clock = pygame.time.Clock()
 
+        self.board_size = 8
+        self.message = False
+        self.timed_message_surface = None
+        self.timed_message_rect = None
+        self.timed_message_until = 0  # pygame.time.get_ticks() expiry
+        self.piece_icons = {}  # (piece_type, 'white'|'black') -> scaled Surface
+        self.highlights = False
+        self.show_hints = True   # toggle: show piece selection + legal-move highlighting
+        self.board_theme = 'Classic'
+        self.piece_theme = 'Classic'
+
         pygame.init()
         info = pygame.display.Info()
+        self._reinit_layout(info.current_w, info.current_h)
+
+    def _reinit_layout(self, new_w, new_h):
+        """Recompute all display-derived dimensions and resize the pygame surface.
+
+        Called at startup and whenever an orientation-change / resize event fires.
+        Board state (board_size, piece_icons, etc.) is preserved across calls.
+        """
         _android = _on_android()
         _flags = pygame.FULLSCREEN if _android else 0
         # Scale all UI dimensions to the screen size on Android.
         # button_bar_height must be known before window_size calculation.
-        self._s = _ui_scale(info.current_w, info.current_h)
+        self._s = _ui_scale(new_w, new_h)
         self.button_bar_height = _fz(48, self._s)
-        self.window_size = max(0, min(info.current_w, info.current_h - self.button_bar_height))
+        self.window_size = max(0, min(new_w, new_h - self.button_bar_height))
         if _android:
-            self.screen_w = info.current_w
-            self.screen_h = info.current_h
+            self.screen_w = new_w
+            self.screen_h = new_h
         else:
             self.screen_w = self.window_size
             self.screen_h = self.window_size + self.button_bar_height
         self.screen = pygame.display.set_mode((self.screen_w, self.screen_h), _flags)
-
-        self.board_size = 8
         self.square_size = self.window_size // self.board_size
         self.piece_size = self.square_size // 2
-        self.piece_font = pygame.font.SysFont(None, self.piece_size)
-
-        self.message = False
-
-        self.timed_message_surface = None
-        self.timed_message_rect = None
-        self.timed_message_until = 0  # pygame.time.get_ticks() expiry
-
-        self.piece_icons = {}  # (piece_type, 'white'|'black') -> scaled Surface
-
-        self.highlights = False
-        self.show_hints = True   # toggle: show piece selection + legal-move highlighting
-
+        self.piece_font = pygame.font.SysFont(None, max(self.piece_size, 1))
         self.frame_size = min(48, _fz(28, self._s))  # border for coord labels, capped so board stays large
         # Centre board vertically in the space above the button bar on tall screens
         self.board_y_offset = max(0, (self.screen_h - self.button_bar_height - self.window_size) // 2)
-        self.board_theme = 'Classic'
-        self.piece_theme = 'Classic'
 
     # Hex colours used to colorize SVG templates for each side (pixel art tonal palette)
     ICON_COLOURS = {
@@ -995,13 +1018,17 @@ class PieceEditor:
     def __init__(self):
         pygame.init()
         info = pygame.display.Info()
+        self._piece_names_cache = []
+        self._reinit_display(info.current_w, info.current_h)
+        pygame.display.set_caption('megaChess — piece editor')
+
+    def _reinit_display(self, new_w, new_h):
+        """Recompute screen dimensions and fonts after an orientation change."""
         _android = _on_android()
         _flags = pygame.FULLSCREEN if _android else 0
-        self.w = info.current_w if _android else min(info.current_w, info.current_h)
-        self.h = info.current_h if _android else self.w
+        self.w = new_w if _android else min(new_w, new_h)
+        self.h = new_h if _android else self.w
         self.screen = pygame.display.set_mode((self.w, self.h), _flags)
-        pygame.display.set_caption('megaChess — piece editor')
-        self._piece_names_cache = []
         _raw = _ui_scale(self.w, self.h)
         _font_s   = min(_raw, 2.0)   # fonts scale up to 2× — buttons stay safe via _fit_font
         _layout_s = min(_raw, 1.3)   # layout: compact so text fits in buttons
@@ -1060,6 +1087,11 @@ class PieceEditor:
                 if event.type == locals.QUIT:
                     pygame.quit()
                     sys.exit()
+
+                _sz = _resize_event_size(event)
+                if _sz:
+                    self._reinit_display(*_sz)
+                    continue
 
                 if event.type == locals.KEYDOWN and event.key == locals.K_ESCAPE:
                     return defs, saved_path
@@ -1553,12 +1585,24 @@ class BoardLayoutEditor:
                  custom_board=None, custom_piece=None):
         pygame.init()
         info = pygame.display.Info()
+
+        self.board_theme = board_theme if board_theme in BOARD_THEMES else 'Classic'
+        self.piece_theme = piece_theme if piece_theme in PIECE_THEMES else 'Classic'
+
+        # Custom shade overrides (None = use the selected theme's colours as-is)
+        self.custom_board = copy.deepcopy(custom_board) if custom_board else None
+        self.custom_piece = copy.deepcopy(custom_piece) if custom_piece else None
+
+        self._reinit_display(info.current_w, info.current_h)
+        pygame.display.set_caption('megaChess — board layout editor')
+
+    def _reinit_display(self, new_w, new_h):
+        """Recompute screen dimensions and fonts after an orientation change."""
         _android = _on_android()
         _flags = pygame.FULLSCREEN if _android else 0
-        self.w = info.current_w if _android else min(info.current_w, info.current_h)
-        self.h = info.current_h if _android else self.w
+        self.w = new_w if _android else min(new_w, new_h)
+        self.h = new_h if _android else self.w
         self.screen = pygame.display.set_mode((self.w, self.h), _flags)
-        pygame.display.set_caption('megaChess — board layout editor')
         _raw = _ui_scale(self.w, self.h)
         _font_s   = min(_raw, 2.0)   # fonts scale up to 2× — buttons stay safe via _fit_font
         _layout_s = min(_raw, 1.3)   # layout: compact so text fits in buttons
@@ -1569,13 +1613,6 @@ class BoardLayoutEditor:
         # Override class constants with scaled instance values
         self.PADDING  = _fz(14, _layout_s)
         self.HEADER_H = _fz(48, _layout_s)
-
-        self.board_theme = board_theme if board_theme in BOARD_THEMES else 'Classic'
-        self.piece_theme = piece_theme if piece_theme in PIECE_THEMES else 'Classic'
-
-        # Custom shade overrides (None = use the selected theme's colours as-is)
-        self.custom_board = copy.deepcopy(custom_board) if custom_board else None
-        self.custom_piece = copy.deepcopy(custom_piece) if custom_piece else None
 
         # Piece icon rendering (for palette + board preview)
         self._pieces_defs = AllPieces().pieces_defs
@@ -1821,6 +1858,12 @@ class BoardLayoutEditor:
                 if event.type == locals.QUIT:
                     pygame.quit()
                     sys.exit()
+
+                _sz = _resize_event_size(event)
+                if _sz:
+                    self._reinit_display(*_sz)
+                    self._reload_icons()
+                    continue
 
                 if event.type == locals.KEYDOWN and event.key == locals.K_ESCAPE:
                     return (layout, saved_path, self.board_theme, self.piece_theme,
@@ -2439,91 +2482,100 @@ def _preset_hexagon():
 def _start_menu(screen, w, h):
     """
     Simple title screen.  Returns 'play', 'edit_pieces', or 'edit_layout'.
+    Handles orientation changes (VIDEORESIZE / WINDOWRESIZED) by recomputing layout.
     """
     pygame.display.set_caption('megaChess')
     clock = pygame.time.Clock()
-    _s = _ui_scale(w, h)
-    gap = _fz(16, _s)
-    _portrait = h > w * 1.1
-    # All content (corners, title, buttons) is laid out within eff_h = min(w, h).
-    # The dark background fills the full h, keeping the screen full-height on Android
-    # while the interactive elements stay in the "roughly half-height" upper square.
-    eff_h = min(w, h)
-    _corner_sz = 14 * 4   # _cell * 4, matches corner decoration built below
-    if _portrait:
-        btn_scale = min(_s, 1.3)           # cap so buttons don't dominate eff_h
-        bh = _fz(48, btn_scale)
-        bw = w - gap * 2
-        x0 = gap
-        btn_gap = _fz(12, btn_scale)       # spacing between portrait buttons
-        btn_area_h = bh * 3 + btn_gap * 2
-        frame_y = max(gap * 2, eff_h // 8)
-        _btn_bottom_y = eff_h - _corner_sz - 16   # corners inside eff_h square
-        # lay out buttons just above the bottom corner row
-        y0 = _btn_bottom_y - btn_gap - btn_area_h
-        btns = {
-            'Play':        pygame.Rect(x0, y0,                        bw, bh),
-            'Edit Pieces': pygame.Rect(x0, y0 + (bh + btn_gap),      bw, bh),
-            'Edit Layout': pygame.Rect(x0, y0 + (bh + btn_gap) * 2,  bw, bh),
+    _android = _on_android()
+
+    def _build_layout(W, H):
+        """Compute all layout variables and pre-built surfaces for screen size W×H."""
+        import types
+        L = types.SimpleNamespace()
+        L._s = _ui_scale(W, H)
+        L.gap = _fz(16, L._s)
+        _portrait = H > W * 1.1
+        # All interactive content lives within eff_h = min(W, H) (the square region).
+        # On tall Android screens the dark background fills full H but elements stay square.
+        eff_h = min(W, H)
+        _corner_sz = 14 * 4   # _cell * 4, matches corner decoration built below
+        if _portrait:
+            btn_scale = min(L._s, 1.3)
+            L.bh = _fz(48, btn_scale)
+            bw = W - L.gap * 2
+            x0 = L.gap
+            btn_gap = _fz(12, btn_scale)
+            btn_area_h = L.bh * 3 + btn_gap * 2
+            L.frame_y = max(L.gap * 2, eff_h // 8)
+            L._btn_bottom_y = eff_h - _corner_sz - 16
+            y0 = L._btn_bottom_y - btn_gap - btn_area_h
+            L.btns = {
+                'Play':        pygame.Rect(x0, y0,                        bw, L.bh),
+                'Edit Pieces': pygame.Rect(x0, y0 + (L.bh + btn_gap),    bw, L.bh),
+                'Edit Layout': pygame.Rect(x0, y0 + (L.bh + btn_gap) * 2, bw, L.bh),
+            }
+        else:
+            L.bh = _fz(56, L._s)
+            bw = _fz(210, L._s)
+            total_w = bw * 3 + L.gap * 2
+            x0 = W // 2 - total_w // 2
+            L.frame_y = eff_h // 5
+            L.btns = {
+                'Play':         pygame.Rect(x0,                    eff_h * 2 // 3, bw, L.bh),
+                'Edit Pieces':  pygame.Rect(x0 + (bw + L.gap),    eff_h * 2 // 3, bw, L.bh),
+                'Edit Layout':  pygame.Rect(x0 + (bw + L.gap) * 2, eff_h * 2 // 3, bw, L.bh),
+            }
+            L._btn_bottom_y = eff_h - _corner_sz - 16
+        L.btn_colors = {
+            'Play':        (30,  75, 150),
+            'Edit Pieces': (30, 100,  55),
+            'Edit Layout': (90,  40, 120),
         }
-    else:
-        bh = _fz(56, _s)
-        bw = _fz(210, _s)
-        total_w = bw * 3 + gap * 2
-        x0 = w // 2 - total_w // 2
-        frame_y = eff_h // 5
-        btns = {
-            'Play':         pygame.Rect(x0,                   eff_h * 2 // 3, bw, bh),
-            'Edit Pieces':  pygame.Rect(x0 + (bw + gap),      eff_h * 2 // 3, bw, bh),
-            'Edit Layout':  pygame.Rect(x0 + (bw + gap) * 2,  eff_h * 2 // 3, bw, bh),
+        L.key_map = {
+            'Play':        'play',
+            'Edit Pieces': 'edit_pieces',
+            'Edit Layout': 'edit_layout',
         }
-        _btn_bottom_y = eff_h - _corner_sz - 16   # corners inside eff_h square
-    btn_colors = {
-        'Play':        (30,  75, 150),
-        'Edit Pieces': (30, 100,  55),
-        'Edit Layout': (90,  40, 120),
-    }
-    key_map = {
-        'Play':        'play',
-        'Edit Pieces': 'edit_pieces',
-        'Edit Layout': 'edit_layout',
-    }
+        L.W = W
+        L.H = H
 
-    # Pre-build pixel-art grid overlay (subtle tile grid)
-    grid_overlay = pygame.Surface((w, h), pygame.SRCALPHA)
-    for gx in range(0, w, 16):
-        pygame.draw.line(grid_overlay, (255, 255, 255, 12), (gx, 0), (gx, h))
-    for gy in range(0, h, 16):
-        pygame.draw.line(grid_overlay, (255, 255, 255, 12), (0, gy), (w, gy))
+        # Pre-build pixel-art grid overlay (subtle tile grid)
+        L.grid_overlay = pygame.Surface((W, H), pygame.SRCALPHA)
+        for gx in range(0, W, 16):
+            pygame.draw.line(L.grid_overlay, (255, 255, 255, 12), (gx, 0), (gx, H))
+        for gy in range(0, H, 16):
+            pygame.draw.line(L.grid_overlay, (255, 255, 255, 12), (0, gy), (W, gy))
 
-    # Pre-build scanline overlay (CRT retro effect)
-    scanlines = pygame.Surface((w, h), pygame.SRCALPHA)
-    for sy in range(0, h, 2):
-        pygame.draw.line(scanlines, (0, 0, 0, 80), (0, sy), (w, sy))
+        # Pre-build scanline overlay (CRT retro effect)
+        L.scanlines = pygame.Surface((W, H), pygame.SRCALPHA)
+        for sy in range(0, H, 2):
+            pygame.draw.line(L.scanlines, (0, 0, 0, 80), (0, sy), (W, sy))
 
-    # Pre-build corner chess board decorations (4×4 grid of 14×14px squares)
-    _cell = 14
-    _t = BOARD_THEMES['Classic']
-    _corner_surf = pygame.Surface((_cell * 4, _cell * 4))
-    for _r in range(4):
-        for _c in range(4):
-            _col = _t['light'] if (_r + _c) % 2 == 0 else _t['dark']
-            pygame.draw.rect(_corner_surf, _col,
-                             (_c * _cell, _r * _cell, _cell, _cell))
-    # bevel each mini-square
-    _bv = 2
-    for _r in range(4):
-        for _c in range(4):
-            _is_l = (_r + _c) % 2 == 0
-            _hi = _t['light_hi'] if _is_l else _t['dark_hi']
-            _lo = _t['light_lo'] if _is_l else _t['dark_lo']
-            _rx, _ry = _c * _cell, _r * _cell
-            pygame.draw.rect(_corner_surf, _hi, (_rx, _ry, _cell, _bv))
-            pygame.draw.rect(_corner_surf, _hi, (_rx, _ry, _bv, _cell))
-            pygame.draw.rect(_corner_surf, _lo, (_rx, _ry + _cell - _bv, _cell, _bv))
-            pygame.draw.rect(_corner_surf, _lo, (_rx + _cell - _bv, _ry, _bv, _cell))
-    _corner_w = _cell * 4
-    pygame.draw.rect(_corner_surf, Colours.HIGH, (0, 0, _corner_w, _corner_w), 2)
+        # Pre-build corner chess board decorations (4×4 grid of 14×14px squares)
+        _cell = 14
+        _t = BOARD_THEMES['Classic']
+        L._corner_surf = pygame.Surface((_cell * 4, _cell * 4))
+        for _r in range(4):
+            for _c in range(4):
+                _col = _t['light'] if (_r + _c) % 2 == 0 else _t['dark']
+                pygame.draw.rect(L._corner_surf, _col, (_c * _cell, _r * _cell, _cell, _cell))
+        _bv = 2
+        for _r in range(4):
+            for _c in range(4):
+                _is_l = (_r + _c) % 2 == 0
+                _hi = _t['light_hi'] if _is_l else _t['dark_hi']
+                _lo = _t['light_lo'] if _is_l else _t['dark_lo']
+                _rx, _ry = _c * _cell, _r * _cell
+                pygame.draw.rect(L._corner_surf, _hi, (_rx, _ry, _cell, _bv))
+                pygame.draw.rect(L._corner_surf, _hi, (_rx, _ry, _bv, _cell))
+                pygame.draw.rect(L._corner_surf, _lo, (_rx, _ry + _cell - _bv, _cell, _bv))
+                pygame.draw.rect(L._corner_surf, _lo, (_rx + _cell - _bv, _ry, _bv, _cell))
+        L._corner_w = _cell * 4
+        pygame.draw.rect(L._corner_surf, Colours.HIGH, (0, 0, L._corner_w, L._corner_w), 2)
+
+        return L
+
+    L = _build_layout(w, h)
 
     while True:
         mx, my = pygame.mouse.get_pos()
@@ -2531,13 +2583,19 @@ def _start_menu(screen, w, h):
             if event.type == locals.QUIT:
                 pygame.quit()
                 sys.exit()
+            _sz = _resize_event_size(event)
+            if _sz:
+                w, h = _sz
+                screen = pygame.display.set_mode((w, h), pygame.FULLSCREEN if _android else 0)
+                L = _build_layout(w, h)
+                continue
             if event.type == pygame.FINGERDOWN:
                 tw, th = screen.get_size()
                 mx, my = int(event.x * tw), int(event.y * th)
             if event.type in (locals.MOUSEBUTTONDOWN, pygame.FINGERDOWN):
-                for label, rect in btns.items():
+                for label, rect in L.btns.items():
                     if rect.collidepoint(mx, my):
-                        return key_map[label]
+                        return L.key_map[label]
             if event.type == locals.KEYDOWN:
                 if event.key == locals.K_RETURN:
                     return 'play'
@@ -2548,67 +2606,57 @@ def _start_menu(screen, w, h):
 
         screen.fill((10, 8, 20))
         # Pixel-art grid + corner chess board decorations
-        screen.blit(grid_overlay, (0, 0))
+        screen.blit(L.grid_overlay, (0, 0))
         margin = 16
-        screen.blit(_corner_surf, (margin, margin))
-        screen.blit(pygame.transform.flip(_corner_surf, True,  False), (w - _corner_w - margin, margin))
-        screen.blit(pygame.transform.flip(_corner_surf, False, True),  (margin, _btn_bottom_y))
-        screen.blit(pygame.transform.flip(_corner_surf, True,  True),  (w - _corner_w - margin, _btn_bottom_y))
-        screen.blit(scanlines, (0, 0))
+        screen.blit(L._corner_surf, (margin, margin))
+        screen.blit(pygame.transform.flip(L._corner_surf, True,  False), (w - L._corner_w - margin, margin))
+        screen.blit(pygame.transform.flip(L._corner_surf, False, True),  (margin, L._btn_bottom_y))
+        screen.blit(pygame.transform.flip(L._corner_surf, True,  True),  (w - L._corner_w - margin, L._btn_bottom_y))
+        screen.blit(L.scanlines, (0, 0))
 
         # Stacked two-colour pixel art title: MEGA (gold) + CHESS (teal)
-        _title_sz = _fz(72, min(_s, 1.1))   # cap title scale so it doesn't crowd buttons
+        _title_sz = _fz(72, min(L._s, 1.1))   # cap title scale so it doesn't crowd buttons
         mega_surf  = _pixel_text('MEGA',  _title_sz, Colours.GOLD, bold=True)
         chess_surf = _pixel_text('CHESS', _title_sz, Colours.HIGH, bold=True)
         title_w  = max(mega_surf.get_width(), chess_surf.get_width())
         title_h  = mega_surf.get_height() + chess_surf.get_height() + 4
         frame_x  = w // 2 - title_w // 2 - 24
-        # frame_y pre-computed in layout block above
-        pad = _fz(16, _s)
+        pad = _fz(16, L._s)
         # Outer teal border + dark inner fill
         pygame.draw.rect(screen, Colours.HIGH,
-                         (frame_x - 4, frame_y - 4, title_w + 56, title_h + pad * 2 + 8), 3)
+                         (frame_x - 4, L.frame_y - 4, title_w + 56, title_h + pad * 2 + 8), 3)
         pygame.draw.rect(screen, (8, 8, 18),
-                         (frame_x, frame_y, title_w + 48, title_h + pad * 2))
+                         (frame_x, L.frame_y, title_w + 48, title_h + pad * 2))
         # Bevel lines on title box
-        bx, by, bw2, bh2 = frame_x, frame_y, title_w + 48, title_h + pad * 2
+        bx, by, bw2, bh2 = frame_x, L.frame_y, title_w + 48, title_h + pad * 2
         pygame.draw.line(screen, (80, 215, 215), (bx, by), (bx + bw2, by), 1)
         pygame.draw.line(screen, (80, 215, 215), (bx, by), (bx, by + bh2), 1)
         pygame.draw.line(screen, (20, 40, 80), (bx, by + bh2), (bx + bw2, by + bh2), 1)
         pygame.draw.line(screen, (20, 40, 80), (bx + bw2, by), (bx + bw2, by + bh2), 1)
-        # Pixel art corner dots on title box
         for _dx, _dy in [(bx, by), (bx + bw2 - 4, by), (bx, by + bh2 - 4), (bx + bw2 - 4, by + bh2 - 4)]:
             pygame.draw.rect(screen, Colours.GOLD, (_dx, _dy, 4, 4))
-        # Render titles centred inside box
         cx = bx + bw2 // 2
-        screen.blit(mega_surf,  mega_surf.get_rect(centerx=cx,  top=frame_y + pad))
-        screen.blit(chess_surf, chess_surf.get_rect(centerx=cx, top=frame_y + pad + mega_surf.get_height() + 4))
+        screen.blit(mega_surf,  mega_surf.get_rect(centerx=cx,  top=L.frame_y + pad))
+        screen.blit(chess_surf, chess_surf.get_rect(centerx=cx, top=L.frame_y + pad + mega_surf.get_height() + 4))
 
         # Blinking cursor prompt + keyboard shortcuts
         blink = (pygame.time.get_ticks() // 500) % 2
         hint_str = 'PRESS ENTER TO PLAY' + (' _' if blink else '  ')
-        hint_s = _pixel_text(hint_str, _fz(16, _s), (140, 130, 170), bold=True)
-        screen.blit(hint_s, hint_s.get_rect(centerx=w // 2, top=frame_y + title_h + pad * 2 + gap))
+        hint_s = _pixel_text(hint_str, _fz(16, L._s), (140, 130, 170), bold=True)
+        screen.blit(hint_s, hint_s.get_rect(centerx=w // 2, top=L.frame_y + title_h + pad * 2 + L.gap))
 
-        sub = _pixel_text('E = edit pieces   *   L = edit layout', _fz(14, _s), (100, 90, 130), bold=True)
-        screen.blit(sub, sub.get_rect(centerx=w // 2, top=frame_y + title_h + pad * 2 + gap + hint_s.get_height() + 4))
+        sub = _pixel_text('E = edit pieces   *   L = edit layout', _fz(14, L._s), (100, 90, 130), bold=True)
+        screen.blit(sub, sub.get_rect(centerx=w // 2,
+                                      top=L.frame_y + title_h + pad * 2 + L.gap + hint_s.get_height() + 4))
 
         BEVEL = 2
-        _icon_map = {
-            'Play':        'play',
-            'Edit Pieces': 'pieces',
-            'Edit Layout': 'layout',
-        }
-        _label_map = {
-            'Play':        'Play',
-            'Edit Pieces': 'Pieces',
-            'Edit Layout': 'Layout',
-        }
-        ICN = max(btns['Play'].height - 18, 14)
+        _icon_map  = {'Play': 'play', 'Edit Pieces': 'pieces', 'Edit Layout': 'layout'}
+        _label_map = {'Play': 'Play', 'Edit Pieces': 'Pieces', 'Edit Layout': 'Layout'}
+        ICN = max(L.btns['Play'].height - 18, 14)
         tc = (220, 225, 235)
-        for label, rect in btns.items():
+        for label, rect in L.btns.items():
             hov = rect.collidepoint(mx, my)
-            base = btn_colors[label]
+            base = L.btn_colors[label]
             bg = tuple(min(c + 35, 255) for c in base) if hov else base
             bhi = tuple(min(c + 55, 255) for c in base)
             blo = tuple(max(c - 20, 0) for c in base)
@@ -2618,7 +2666,7 @@ def _start_menu(screen, w, h):
             pygame.draw.line(screen, blo, rect.bottomleft, rect.bottomright, BEVEL)
             pygame.draw.line(screen, blo, rect.topright,   rect.bottomright, BEVEL)
             short = _label_map.get(label, label)
-            _btn_text_sz = max(10, bh * 2 // 5)
+            _btn_text_sz = max(10, L.bh * 2 // 5)
             shadow_s = _pixel_text(short, _btn_text_sz, (0, 0, 0), bold=True)
             txt_s    = _pixel_text(short, _btn_text_sz, tc,         bold=True)
             total_w = ICN + 6 + txt_s.get_width()
@@ -2721,6 +2769,14 @@ def main():
                     PIECE_THEMES['_custom_'] = _orig_piece
                 else:
                     PIECE_THEMES.pop('_custom_', None)
+
+        # Re-sync screen reference after any subsystem — editors and the game view each call
+        # pygame.display.set_mode(), which may have changed dimensions (e.g. on rotation).
+        # get_surface() always returns the current display surface without triggering a resize.
+        _surf = pygame.display.get_surface()
+        if _surf is not None:
+            screen = _surf
+            w, h = screen.get_size()
 
 
 if __name__ == "__main__":

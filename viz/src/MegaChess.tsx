@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 const REPO = "adamsuk/megaChess";
 const FILES = ["common.py", "pieces.py", "positions.py", "board.py", "defs/pieces_defs.json", "runner.py"];
@@ -63,11 +63,29 @@ async function call(sourceRef: string, code: string) {
 }
 
 export default function MegaChess({ sourceRef = "main" }: { sourceRef?: string }) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [full, setFull] = useState(false);
   const [state, setState] = useState<GameState | null>(null);
   const [selected, setSelected] = useState<number[] | null>(null);
   const [moves, setMoves] = useState<number[][]>([]);
   const [status, setStatus] = useState("Loading Chess rules");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const onChange = () => setFull(document.fullscreenElement === rootRef.current);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  const toggleFull = () => {
+    const node = rootRef.current;
+    if (!node) return;
+    if (document.fullscreenElement === node) {
+      document.exitFullscreen().catch(() => setError("Could not leave full screen"));
+      return;
+    }
+    node.requestFullscreen().catch(() => setError("Full screen was blocked by the browser"));
+  };
 
   const refresh = () => {
     setStatus(`Importing Chess from ${REPO}@${sourceRef}`);
@@ -133,7 +151,7 @@ json.dumps(ns["legal"](game_state.to_py(), square.to_py(), "/chess"))
 
   const size = state?.board.board_size || 8;
   return (
-    <div className="mx-auto w-full max-w-3xl rounded-lg bg-gray-50 p-4 shadow-sm dark:bg-gray-900">
+    <div ref={rootRef} className={`mx-auto w-full rounded-lg bg-gray-50 p-4 shadow-sm dark:bg-gray-900 ${full ? "max-w-none min-h-screen" : "max-w-3xl"}`}>
       <h2 className="text-lg font-semibold">megaChess</h2>
       <p className="text-sm text-gray-500">{status}. {state ? `${state.turn} to move${state.check ? ", in check" : ""}.` : ""}</p>
       <details className="my-3 rounded-md border border-gray-200 bg-white p-3 text-sm dark:border-gray-700 dark:bg-gray-950">
@@ -161,7 +179,10 @@ json.dumps(ns["legal"](game_state.to_py(), square.to_py(), "/chess"))
           );
         })}
       </div>
-      <button type="button" className="mt-3 rounded-full bg-gray-900 px-3 py-1 text-sm text-white dark:bg-white dark:text-gray-900" onClick={refresh}>New game</button>
+      <div className="mt-3 flex gap-2">
+        <button type="button" className="rounded-full bg-gray-900 px-3 py-1 text-sm text-white dark:bg-white dark:text-gray-900" onClick={refresh}>New game</button>
+        <button type="button" className="rounded-full bg-gray-200 px-3 py-1 text-sm dark:bg-gray-800" onClick={toggleFull}>{full ? "Exit full screen" : "Full screen"}</button>
+      </div>
       <p className="mt-4 text-sm"><a className="underline" href={`https://github.com/${REPO}/tree/${sourceRef}`}>megaChess {sourceRef}</a></p>
     </div>
   );

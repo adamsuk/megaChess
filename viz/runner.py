@@ -9,7 +9,10 @@ import sys
 import types
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+try:
+    ROOT = Path(__file__).resolve().parents[1]
+except NameError:
+    ROOT = Path("/chess")
 CHESS = ROOT / "Chess"
 
 

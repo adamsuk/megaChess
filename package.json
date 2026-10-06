@@ -1,0 +1,11 @@
+{
+  "name": "megachess-viz",
+  "version": "0.1.0",
+  "description": "Browser board for adamsuk/megaChess. Loads Chess/ rules from the repo.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./viz/src/index.ts",
+  "exports": { ".": "./viz/src/index.ts" },
+  "files": ["viz/src", "viz/runner.py", "Chess"],
+  "peerDependencies": { "react": ">=17", "react-dom": ">=17" }
+}

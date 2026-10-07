@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 
 const REPO = "adamsuk/megaChess";
-const FILES = ["common.py", "pieces.py", "positions.py", "board.py", "defs/pieces_defs.json", "runner.py"];
+const FILES = ["common.py", "pieces.py", "positions.py", "board.py", "win_conditions.py", "defs/pieces_defs.json", "runner.py"];
 const PYODIDE = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js";
 const GLYPH: Record<string, string> = {
   pawn: "♟", knight: "♞", bishop: "♝", rook: "♜", queen: "♛", king: "♚",

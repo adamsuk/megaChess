@@ -19,8 +19,16 @@ FLAGS = ("sliding", "directional", "move_only", "capture_only", "jump_capture")
 
 def _stub_pygame():
     pygame = types.ModuleType("pygame")
-    pygame.font = types.SimpleNamespace(init=lambda: None)
+    pygame.font = types.SimpleNamespace(init=lambda: None, Font=lambda *a, **k: None, SysFont=lambda *a, **k: None)
     pygame.locals = types.ModuleType("pygame.locals")
+    pygame.display = types.SimpleNamespace(set_mode=lambda *a, **k: None, set_caption=lambda *a: None, get_surface=lambda: None, update=lambda: None, flip=lambda: None)
+    pygame.draw = types.SimpleNamespace(rect=lambda *a, **k: None, line=lambda *a, **k: None, circle=lambda *a, **k: None)
+    pygame.Surface = lambda *a, **k: types.SimpleNamespace(fill=lambda *a: None, blit=lambda *a: None)
+    pygame.SRCALPHA = 0
+    pygame.time = types.SimpleNamespace(Clock=lambda: None, get_ticks=lambda: 0)
+    pygame.Rect = lambda *a: types.SimpleNamespace(collidepoint=lambda *a: False)
+    pygame.image = types.SimpleNamespace(load=lambda *a: None)
+    pygame.transform = types.SimpleNamespace(scale=lambda *a: None)
     sys.modules["pygame"] = pygame
     sys.modules["pygame.locals"] = pygame.locals
 
@@ -30,11 +38,12 @@ def _load(chess_dir=None):
     chess = str(Path(chess_dir) if chess_dir else CHESS)
     if chess not in sys.path:
         sys.path.insert(0, chess)
-    for name in ("common", "pieces", "positions", "board", "win_conditions"):
+    for name in ("common", "pieces", "positions", "board", "win_conditions", "svg_renderer", "game"):
         sys.modules.pop(name, None)
     import board
     import win_conditions
-    return board, win_conditions
+    import game
+    return board, win_conditions, game
 
 
 def _condition(win, mode):
@@ -44,7 +53,7 @@ def _condition(win, mode):
 
 
 def _session(state, chess_dir):
-    board_mod, win = _load(chess_dir)
+    board_mod, win, _game = _load(chess_dir)
     board = board_mod.Board()
     rules = (state or {}).get("rules")
     if rules:
@@ -75,7 +84,7 @@ def _layout_checkers(board_mod, board):
 def _state(board, turn, mode):
     from common import Colours
     color = Colours.WHITE if turn == "white" else Colours.PIECE_BLACK
-    _, win = _load()
+    _, win, _game = _load()
     result = _condition(win, mode).check(SimpleNamespace(turn=color, board=board))
     return {
         "board": board.to_dict(),
@@ -133,3 +142,28 @@ def clone_piece(state, piece_type, chess_dir=None):
 def json_copy(value):
     import json
     return json.loads(json.dumps(value))
+
+
+def presets(chess_dir=None):
+    _board, _win, game = _load(chess_dir)
+    return {
+        "standard": game._preset_standard(),
+        "diamond": game._preset_diamond(),
+        "hexagon": game._preset_hexagon(),
+    }
+
+
+def expand_rules(rules, chess_dir=None):
+    _board, _win, game = _load(chess_dir)
+    return game._expand_keywords(json_copy(rules))
+
+
+def start(chess_dir=None, mode="chess", rules=None, layout=None):
+    board_mod, board, _win, = _session({"rules": rules, "board": layout} if layout else {"rules": rules}, chess_dir)
+    if layout:
+        board.from_dict(layout)
+        if rules:
+            board.pieces_defs = rules
+    elif mode == "checkers":
+        _layout_checkers(board_mod, board)
+    return _state(board, "white", mode)

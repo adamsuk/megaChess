@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 
 const REPO = "adamsuk/megaChess";
-const FILES = ["common.py", "pieces.py", "positions.py", "board.py", "win_conditions.py", "defs/pieces_defs.json", "runner.py"];
+const FILES = ["common.py", "pieces.py", "positions.py", "board.py", "win_conditions.py", "svg_renderer.py", "game.py", "defs/pieces_defs.json", "runner.py"];
 const PYODIDE = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js";
 const GLYPH: Record<string, string> = {
   pawn: "♟", knight: "♞", bishop: "♝", rook: "♜", queen: "♛", king: "♚",
@@ -80,6 +80,8 @@ export default function MegaChess({ sourceRef = "main" }: { sourceRef?: string }
   const [error, setError] = useState("");
   const [mode, setMode] = useState("chess");
   const [piece, setPiece] = useState("knight");
+  const [screen, setScreen] = useState<"menu" | "play" | "pieces" | "layout">("menu");
+  const [layout, setLayout] = useState<GameState["board"] | null>(null);
 
   useEffect(() => {
     const onChange = () => setFull(document.fullscreenElement === rootRef.current);
@@ -97,15 +99,29 @@ export default function MegaChess({ sourceRef = "main" }: { sourceRef?: string }
     node.requestFullscreen().catch(() => setError("Full screen was blocked by the browser"));
   };
 
+  const readSession = () => {
+    try { return JSON.parse(sessionStorage.getItem("megachess-session") || "{}"); }
+    catch { return {}; }
+  };
+  const writeSession = (patch: Record<string, unknown>) => {
+    sessionStorage.setItem("megachess-session", JSON.stringify({ ...readSession(), ...patch }));
+  };
   const refresh = () => {
     setStatus(`Importing Chess from ${REPO}@${sourceRef}`);
-    call(sourceRef, `
+    const session = readSession();
+    getPyodide().then((pyodide) => {
+      pyodide.globals.set("saved_rules", session.rules ? JSON.stringify(session.rules) : "");
+      pyodide.globals.set("saved_layout", session.layout ? JSON.stringify(session.layout) : "");
+      return call(sourceRef, `
 import json, sys
 sys.path.insert(0, "/chess")
 ns = {}
 exec(open("/chess/runner.py").read(), ns)
-json.dumps(ns["new_game"]("/chess", "${mode}"))
-`).then((next) => {
+rules = json.loads(saved_rules) if saved_rules else None
+layout = json.loads(saved_layout) if saved_layout else None
+json.dumps(ns["start"]("/chess", "${mode}", rules, layout))
+`);
+    }).then((next) => {
       setState(next);
       setSelected(null);
       setMoves([]);
@@ -159,6 +175,25 @@ json.dumps(ns["legal"](game_state.to_py(), square.to_py(), "/chess"))
     setMoves(legal);
   };
 
+  const loadPreset = async (name: string) => {
+    const next = await call(sourceRef, `
+import json, sys
+sys.path.insert(0, "/chess")
+ns = {}
+exec(open("/chess/runner.py").read(), ns)
+json.dumps(ns["presets"]("/chess")["${name}"])
+`);
+    setLayout(next);
+  };
+  const saveSessionPieces = () => {
+    if (state?.rules) writeSession({ rules: state.rules });
+    setStatus("Saved piece defs to this session");
+  };
+  const saveSessionLayout = () => {
+    if (layout) writeSession({ layout });
+    setStatus("Saved layout to this session");
+  };
+
   const changeRule = async (flag: string, value: boolean) => {
     if (!state) return;
     const pyodide = await getPyodide();
@@ -198,6 +233,13 @@ json.dumps(ns["clone_piece"](game_state.to_py(), piece_type, "/chess"))
   return (
     <div ref={rootRef} className={`mx-auto w-full rounded-lg bg-gray-50 p-4 shadow-sm dark:bg-gray-900 ${full ? "max-w-none min-h-screen" : "max-w-3xl"}`}>
       <h2 className="text-lg font-semibold">megaChess</h2>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" className="rounded-full bg-gray-900 px-3 py-1 text-sm text-white" onClick={() => setScreen("menu")}>Start menu</button>
+        <button type="button" className="rounded-full bg-gray-200 px-3 py-1 text-sm" onClick={() => { setScreen("play"); refresh(); }}>Play</button>
+        <button type="button" className="rounded-full bg-gray-200 px-3 py-1 text-sm" onClick={() => setScreen("pieces")}>Edit pieces</button>
+        <button type="button" className="rounded-full bg-gray-200 px-3 py-1 text-sm" onClick={() => { setScreen("layout"); loadPreset("standard"); }}>Edit layout</button>
+      </div>
+      {screen === "menu" && <p className="mt-3 text-sm text-gray-600">Same three choices as the game menu. Piece and layout saves go to this browser session, which is the file the game writes as defs/custom_pieces.json and defs/custom_layout.json.</p>}
       <p className="text-sm text-gray-500">{status}. {state ? `${state.turn} to move${state.check ? ", in check" : ""}.` : ""}</p>
       <details className="my-3 rounded-md border border-gray-200 bg-white p-3 text-sm dark:border-gray-700 dark:bg-gray-950">
         <summary className="cursor-pointer font-medium">How to use it</summary>

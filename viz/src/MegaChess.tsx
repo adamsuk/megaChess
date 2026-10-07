@@ -94,7 +94,7 @@ import json, sys
 sys.path.insert(0, "/chess")
 ns = {}
 exec(open("/chess/runner.py").read(), ns)
-json.dumps(ns["new_game"]("/chess")["rules"])
+json.dumps(ns["expand_rules"](ns["new_game"]("/chess")["rules"], "/chess"))
 `);
     setRules(next);
   };
@@ -202,6 +202,24 @@ json.dumps(ns["legal"](game_state.to_py(), square.to_py(), "/chess"))
           <select className="w-full rounded border px-2 py-1" value={piece} onChange={(event) => setPiece(event.target.value)}>
             {Object.keys(rules).map((name) => <option key={name}>{name}</option>)}
           </select>
+          <p className="text-xs text-gray-500">Move grid from PieceEditor, five squares each way.</p>
+          <div className="grid w-fit gap-1" style={{ gridTemplateColumns: "repeat(5, 36px)" }}>
+            {Array.from({ length: 25 }, (_, index) => {
+              const dx = (index % 5) - 2;
+              const dy = Math.floor(index / 5) - 2;
+              const deltas = (rule?.deltas as number[][] | undefined) || [];
+              const on = deltas.some((delta) => delta[0] === dx && delta[1] === dy);
+              if (dx === 0 && dy === 0) return <div key="self" className="flex h-9 w-9 items-center justify-center bg-gray-900 text-xs text-white">piece</div>;
+              return (
+                <button key={`${dx}-${dy}`} type="button" className={`h-9 w-9 text-xs ${on ? "bg-emerald-500" : "bg-gray-200"}`} onClick={() => {
+                  const next = structuredClone(rules);
+                  const current = (next[piece].move_rules[0].deltas as number[][]) || [];
+                  next[piece].move_rules[0].deltas = on ? current.filter((delta) => delta[0] !== dx || delta[1] !== dy) : [...current, [dx, dy]];
+                  setRules(next);
+                }}>{dx},{dy}</button>
+              );
+            })}
+          </div>
           {FLAGS.map((flag) => (
             <label key={flag} className="flex items-center gap-2">
               <input type="checkbox" checked={Boolean(rule?.[flag])} onChange={(event) => {
@@ -244,7 +262,7 @@ json.dumps(ns["legal"](game_state.to_py(), square.to_py(), "/chess"))
 
 function BoardView({ size, matrix, moves = [], selected, onSquare }: { size: number; matrix: Cell[][]; moves?: number[][]; selected?: number[] | null; onSquare: (x: number, y: number) => void }) {
   return (
-    <div className="grid w-full max-w-md gap-0.5" style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}>
+    <div className="grid gap-px" style={{ width: size * 40, gridTemplateColumns: `repeat(${size}, 40px)` }}>
       {Array.from({ length: size * size }, (_, index) => {
         const x = index % size;
         const y = Math.floor(index / size);
@@ -254,7 +272,7 @@ function BoardView({ size, matrix, moves = [], selected, onSquare }: { size: num
         const isSelected = selected?.[0] === x && selected?.[1] === y;
         const light = (x + y) % 2 === 0;
         return (
-          <button key={`${x}-${y}`} type="button" onClick={() => onSquare(x, y)} className={`flex aspect-square items-center justify-center text-2xl ${cell === "hole" ? "bg-gray-700" : light ? "bg-amber-100" : "bg-amber-800"} ${isSelected ? "ring-2 ring-sky-500" : ""} ${isMove ? "ring-2 ring-emerald-400" : ""}`}>
+          <button key={`${x}-${y}`} type="button" onClick={() => onSquare(x, y)} className={`flex h-10 w-10 items-center justify-center text-xl ${cell === "hole" ? "bg-gray-700" : light ? "bg-amber-100" : "bg-amber-800"} ${isSelected ? "ring-2 ring-sky-500" : ""} ${isMove ? "ring-2 ring-emerald-400" : ""}`}>
             <span className={piece?.color === "white" ? "text-white drop-shadow" : "text-gray-950"}>{piece ? GLYPH[piece.piece_type] || "?" : ""}</span>
           </button>
         );

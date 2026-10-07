@@ -167,3 +167,9 @@ def start(chess_dir=None, mode="chess", rules=None, layout=None):
     elif mode == "checkers":
         _layout_checkers(board_mod, board)
     return _state(board, "white", mode)
+
+
+def editor_grid(chess_dir=None):
+    _board, _win, game = _load(chess_dir)
+    editor = game.PieceEditor
+    return {"cells": editor.GRID_CELLS, "range": editor.GRID_RANGE}

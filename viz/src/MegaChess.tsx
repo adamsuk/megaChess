@@ -240,6 +240,18 @@ json.dumps(ns["clone_piece"](game_state.to_py(), piece_type, "/chess"))
         <button type="button" className="rounded-full bg-gray-200 px-3 py-1 text-sm" onClick={() => { setScreen("layout"); loadPreset("standard"); }}>Edit layout</button>
       </div>
       {screen === "menu" && <p className="mt-3 text-sm text-gray-600">Same three choices as the game menu. Piece and layout saves go to this browser session, which is the file the game writes as defs/custom_pieces.json and defs/custom_layout.json.</p>}
+      {screen === "pieces" && <button type="button" className="mt-3 rounded-full bg-gray-900 px-3 py-1 text-sm text-white" onClick={saveSessionPieces}>Save pieces to session</button>}
+      {screen === "layout" && (
+        <div className="mt-3">
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="rounded-full bg-gray-200 px-3 py-1 text-sm" onClick={() => loadPreset("standard")}>Standard</button>
+            <button type="button" className="rounded-full bg-gray-200 px-3 py-1 text-sm" onClick={() => loadPreset("diamond")}>Diamond</button>
+            <button type="button" className="rounded-full bg-gray-200 px-3 py-1 text-sm" onClick={() => loadPreset("hexagon")}>Hexagon</button>
+            <button type="button" className="rounded-full bg-gray-900 px-3 py-1 text-sm text-white" onClick={saveSessionLayout}>Save layout to session</button>
+          </div>
+          <p className="mt-2 text-xs text-gray-500">Presets are game.py _preset_standard, _preset_diamond and _preset_hexagon. Play loads the session layout into Board.from_dict.</p>
+        </div>
+      )}
       <p className="text-sm text-gray-500">{status}. {state ? `${state.turn} to move${state.check ? ", in check" : ""}.` : ""}</p>
       <details className="my-3 rounded-md border border-gray-200 bg-white p-3 text-sm dark:border-gray-700 dark:bg-gray-950">
         <summary className="cursor-pointer font-medium">How to use it</summary>

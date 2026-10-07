@@ -104,7 +104,7 @@ import json, sys
 sys.path.insert(0, "/chess")
 ns = {}
 exec(open("/chess/runner.py").read(), ns)
-json.dumps(ns["new_game"]("/chess", mode))
+json.dumps(ns["new_game"]("/chess", "${mode}"))
 `).then((next) => {
       setState(next);
       setSelected(null);
@@ -117,7 +117,7 @@ json.dumps(ns["new_game"]("/chess", mode))
     });
   };
 
-  useEffect(() => { refresh(); }, [sourceRef]);
+  useEffect(() => { refresh(); }, [sourceRef, mode]);
 
   const select = async (x: number, y: number) => {
     if (!state) return;

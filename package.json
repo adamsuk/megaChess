@@ -1,6 +1,6 @@
 {
   "name": "megachess-viz",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Browser board for adamsuk/megaChess. Loads Chess/ rules from the repo.",
   "license": "MIT",
   "type": "module",

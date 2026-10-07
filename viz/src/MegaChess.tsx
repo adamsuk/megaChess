@@ -262,21 +262,23 @@ json.dumps(ns["legal"](game_state.to_py(), square.to_py(), "/chess"))
 
 function BoardView({ size, matrix, moves = [], selected, onSquare }: { size: number; matrix: Cell[][]; moves?: number[][]; selected?: number[] | null; onSquare: (x: number, y: number) => void }) {
   return (
-    <div className="grid gap-px" style={{ width: size * 40, gridTemplateColumns: `repeat(${size}, 40px)` }}>
-      {Array.from({ length: size * size }, (_, index) => {
-        const x = index % size;
-        const y = Math.floor(index / size);
-        const cell = matrix[x]?.[y];
-        const piece = cell && cell !== "hole" ? cell : null;
-        const isMove = moves.some((move) => move[0] === x && move[1] === y);
-        const isSelected = selected?.[0] === x && selected?.[1] === y;
-        const light = (x + y) % 2 === 0;
-        return (
-          <button key={`${x}-${y}`} type="button" onClick={() => onSquare(x, y)} className={`flex h-10 w-10 items-center justify-center text-xl ${cell === "hole" ? "bg-gray-700" : light ? "bg-amber-100" : "bg-amber-800"} ${isSelected ? "ring-2 ring-sky-500" : ""} ${isMove ? "ring-2 ring-emerald-400" : ""}`}>
-            <span className={piece?.color === "white" ? "text-white drop-shadow" : "text-gray-950"}>{piece ? GLYPH[piece.piece_type] || "?" : ""}</span>
-          </button>
-        );
-      })}
+    <div className="w-full max-w-full overflow-hidden">
+      <div className="grid w-full gap-px" style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}>
+        {Array.from({ length: size * size }, (_, index) => {
+          const x = index % size;
+          const y = Math.floor(index / size);
+          const cell = matrix[x]?.[y];
+          const piece = cell && cell !== "hole" ? cell : null;
+          const isMove = moves.some((move) => move[0] === x && move[1] === y);
+          const isSelected = selected?.[0] === x && selected?.[1] === y;
+          const light = (x + y) % 2 === 0;
+          return (
+            <button key={`${x}-${y}`} type="button" onClick={() => onSquare(x, y)} className={`flex aspect-square w-full min-w-0 items-center justify-center p-0 text-[clamp(0.6rem,4vw,1.4rem)] ${cell === "hole" ? "bg-gray-700" : light ? "bg-amber-100" : "bg-amber-800"} ${isSelected ? "ring-2 ring-sky-500" : ""} ${isMove ? "ring-2 ring-emerald-400" : ""}`}>
+              <span className={piece?.color === "white" ? "text-white drop-shadow" : "text-gray-950"}>{piece ? GLYPH[piece.piece_type] || "?" : ""}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -9,7 +9,15 @@ const GLYPH: Record<string, string> = {
 };
 
 type Cell = { piece_type: string; color: string; has_moved: boolean } | "hole" | null;
-type GameState = { board: { board_size: number; matrix: Cell[][] }; turn: string; check: boolean };
+type Rule = { deltas?: unknown; sliding?: boolean; directional?: boolean; move_only?: boolean; capture_only?: boolean; jump_capture?: boolean };
+type GameState = {
+  board: { board_size: number; matrix: Cell[][] };
+  turn: string;
+  mode: string;
+  rules: Record<string, { move_rules: Rule[] }>;
+  flags: string[];
+  result: string | null;
+};
 
 type Pyodide = {
   loadPackage: (name: string) => Promise<void>;
@@ -70,6 +78,8 @@ export default function MegaChess({ sourceRef = "main" }: { sourceRef?: string }
   const [moves, setMoves] = useState<number[][]>([]);
   const [status, setStatus] = useState("Loading Chess rules");
   const [error, setError] = useState("");
+  const [mode, setMode] = useState("chess");
+  const [piece, setPiece] = useState("knight");
 
   useEffect(() => {
     const onChange = () => setFull(document.fullscreenElement === rootRef.current);
@@ -94,7 +104,7 @@ import json, sys
 sys.path.insert(0, "/chess")
 ns = {}
 exec(open("/chess/runner.py").read(), ns)
-json.dumps(ns["new_game"]("/chess"))
+json.dumps(ns["new_game"]("/chess", mode))
 `).then((next) => {
       setState(next);
       setSelected(null);
@@ -149,7 +159,42 @@ json.dumps(ns["legal"](game_state.to_py(), square.to_py(), "/chess"))
     setMoves(legal);
   };
 
+  const changeRule = async (flag: string, value: boolean) => {
+    if (!state) return;
+    const pyodide = await getPyodide();
+    pyodide.globals.set("game_state", state);
+    pyodide.globals.set("piece_type", piece);
+    pyodide.globals.set("flag", flag);
+    pyodide.globals.set("flag_value", value);
+    const next = await call(sourceRef, `
+import json, sys
+sys.path.insert(0, "/chess")
+ns = {}
+exec(open("/chess/runner.py").read(), ns)
+json.dumps(ns["set_rule"](game_state.to_py(), piece_type, 0, flag, flag_value, "/chess"))
+`);
+    setState(next);
+  };
+
+  const clone = async () => {
+    if (!state) return;
+    const pyodide = await getPyodide();
+    pyodide.globals.set("game_state", state);
+    pyodide.globals.set("piece_type", piece);
+    const next = await call(sourceRef, `
+import json, sys
+sys.path.insert(0, "/chess")
+ns = {}
+exec(open("/chess/runner.py").read(), ns)
+json.dumps(ns["clone_piece"](game_state.to_py(), piece_type, "/chess"))
+`);
+    setState(next);
+    setPiece(piece.endsWith("_custom") ? piece : `${piece}_custom`);
+  };
+
   const size = state?.board.board_size || 8;
+  const rule = state?.rules?.[piece]?.move_rules?.[0];
+
   return (
     <div ref={rootRef} className={`mx-auto w-full rounded-lg bg-gray-50 p-4 shadow-sm dark:bg-gray-900 ${full ? "max-w-none min-h-screen" : "max-w-3xl"}`}>
       <h2 className="text-lg font-semibold">megaChess</h2>
@@ -179,9 +224,30 @@ json.dumps(ns["legal"](game_state.to_py(), square.to_py(), "/chess"))
           );
         })}
       </div>
-      <div className="mt-3 flex gap-2">
+      <div className="mt-3 flex flex-wrap gap-2">
         <button type="button" className="rounded-full bg-gray-900 px-3 py-1 text-sm text-white dark:bg-white dark:text-gray-900" onClick={refresh}>New game</button>
+        <button type="button" className={`rounded-full px-3 py-1 text-sm ${mode === "chess" ? "bg-gray-900 text-white" : "bg-gray-200"}`} onClick={() => setMode("chess")}>Chess</button>
+        <button type="button" className={`rounded-full px-3 py-1 text-sm ${mode === "checkers" ? "bg-gray-900 text-white" : "bg-gray-200"}`} onClick={() => setMode("checkers")}>Checkers</button>
         <button type="button" className="rounded-full bg-gray-200 px-3 py-1 text-sm dark:bg-gray-800" onClick={toggleFull}>{full ? "Exit full screen" : "Full screen"}</button>
+      </div>
+      {state?.result && <p className="mt-3 text-sm font-semibold">{state.result}</p>}
+      <div className="mt-4 rounded-md border border-gray-200 bg-white p-3 text-sm dark:border-gray-700 dark:bg-gray-950">
+        <p className="font-medium">Piece rules from Chess/defs</p>
+        <label className="mt-2 block text-xs text-gray-500">Piece
+          <select className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-950" value={piece} onChange={(event) => setPiece(event.target.value)}>
+            {Object.keys(state?.rules || { knight: {} }).map((name) => <option key={name}>{name}</option>)}
+          </select>
+        </label>
+        <div className="mt-2 flex flex-wrap gap-3">
+          {(state?.flags || ["sliding", "directional", "move_only", "capture_only", "jump_capture"]).map((flag) => (
+            <label key={flag} className="flex items-center gap-1 text-xs">
+              <input type="checkbox" checked={Boolean(rule?.[flag as keyof Rule])} onChange={(event) => changeRule(flag, event.target.checked)} />
+              {flag}
+            </label>
+          ))}
+        </div>
+        <button type="button" className="mt-2 text-xs underline" onClick={clone}>Clone as custom piece</button>
+        <p className="mt-2 text-xs text-gray-500">Moves use win_conditions.safe_moves. Chess filters check. Checkers uses legal jumps. Toggles edit the loaded defs in memory.</p>
       </div>
       <p className="mt-4 text-sm"><a className="underline" href={`https://github.com/${REPO}/tree/${sourceRef}`}>megaChess {sourceRef}</a></p>
     </div>

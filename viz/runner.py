@@ -1,19 +1,20 @@
 """Run megaChess rules without copying them or opening the PyGame window.
 
 board.py imports pygame at module level. This runner stubs that module,
-then imports Chess/board.py, positions.py and pieces.py from the repo.
+then imports Chess/board.py, positions.py, pieces.py and win_conditions.py.
 """
 
-import json
 import sys
 import types
 from pathlib import Path
+from types import SimpleNamespace
 
 try:
     ROOT = Path(__file__).resolve().parents[1]
 except NameError:
     ROOT = Path("/chess")
 CHESS = ROOT / "Chess"
+FLAGS = ("sliding", "directional", "move_only", "capture_only", "jump_capture")
 
 
 def _stub_pygame():
@@ -29,41 +30,81 @@ def _load(chess_dir=None):
     chess = str(Path(chess_dir) if chess_dir else CHESS)
     if chess not in sys.path:
         sys.path.insert(0, chess)
-    for name in ("common", "pieces", "positions", "board"):
+    for name in ("common", "pieces", "positions", "board", "win_conditions"):
         sys.modules.pop(name, None)
     import board
-    return board
+    import win_conditions
+    return board, win_conditions
 
 
-def _state(board, turn):
+def _condition(win, mode):
+    if mode == "checkers":
+        return win.CheckersWinCondition()
+    return win.ChessWinCondition()
+
+
+def _session(state, chess_dir):
+    board_mod, win = _load(chess_dir)
+    board = board_mod.Board()
+    rules = (state or {}).get("rules")
+    if rules:
+        board.pieces_defs = rules
+    if state and state.get("board"):
+        board.from_dict(state["board"])
+        if rules:
+            board.pieces_defs = rules
+    return board_mod, board, win
+
+
+def _layout_checkers(board_mod, board):
+    from common import Colours
+    board.new_board()
+    for x in range(board.board_size):
+        for y in range(board.board_size):
+            board.matrix[x][y].occupant = None
+    for y in range(3):
+        for x in range(board.board_size):
+            if (x + y) % 2:
+                board.matrix[x][y].occupant = board_mod.Piece(Colours.PIECE_BLACK, "checkers_man")
+    for y in range(board.board_size - 3, board.board_size):
+        for x in range(board.board_size):
+            if (x + y) % 2:
+                board.matrix[x][y].occupant = board_mod.Piece(Colours.WHITE, "checkers_man")
+
+
+def _state(board, turn, mode):
     from common import Colours
     color = Colours.WHITE if turn == "white" else Colours.PIECE_BLACK
+    _, win = _load()
+    result = _condition(win, mode).check(SimpleNamespace(turn=color, board=board))
     return {
         "board": board.to_dict(),
         "turn": turn,
-        "check": board.is_in_check(color),
+        "mode": mode,
+        "rules": board.pieces_defs,
+        "flags": list(FLAGS),
+        "result": result.message if result else None,
     }
 
 
-def new_game(chess_dir=None):
-    board = _load(chess_dir).Board()
-    return _state(board, "white")
+def new_game(chess_dir=None, mode="chess"):
+    board_mod, board, _win = _session(None, chess_dir)
+    if mode == "checkers":
+        _layout_checkers(board_mod, board)
+    return _state(board, "white", mode)
 
 
 def legal(state, square, chess_dir=None):
-    module = _load(chess_dir)
-    board = module.Board()
-    board.from_dict(state["board"])
-    moves = board.legal_moves_safe(tuple(square))
+    _board_mod, board, win = _session(state, chess_dir)
+    moves = _condition(win, state.get("mode", "chess")).safe_moves(board, tuple(square))
     return [list(move) for move in moves]
 
 
 def move(state, start, end, chess_dir=None):
-    module = _load(chess_dir)
-    board = module.Board()
-    board.from_dict(state["board"])
+    _board_mod, board, win = _session(state, chess_dir)
+    mode = state.get("mode", "chess")
     start, end = tuple(start), tuple(end)
-    allowed = [tuple(item) for item in board.legal_moves_safe(start)]
+    allowed = [tuple(item) for item in _condition(win, mode).safe_moves(board, start)]
     if end not in allowed:
         raise ValueError("illegal move")
     board.move_piece(start, end)
@@ -72,17 +113,23 @@ def move(state, start, end, chess_dir=None):
         board.matrix[x][y].occupant.piece_type = "queen"
         board.promotion_pending = None
     turn = "black" if state.get("turn") == "white" else "white"
-    return _state(board, turn)
+    return _state(board, turn, mode)
 
 
-def set_rule(state, piece_type, rule_index, flag, value):
-    module = _load()
-    board = module.Board()
-    board.from_dict(state["board"])
+def set_rule(state, piece_type, rule_index, flag, value, chess_dir=None):
+    _board_mod, board, _win = _session(state, chess_dir)
     rule = board.pieces_defs[piece_type]["move_rules"][int(rule_index)]
     rule[flag] = bool(value)
-    fresh = module.Board()
-    fresh.pieces_defs = board.pieces_defs
-    fresh.from_dict(state["board"])
-    fresh.pieces_defs = board.pieces_defs
-    return {**_state(fresh, state.get("turn", "white")), "rules": board.pieces_defs}
+    return _state(board, state.get("turn", "white"), state.get("mode", "chess"))
+
+
+def clone_piece(state, piece_type, chess_dir=None):
+    _board_mod, board, _win = _session(state, chess_dir)
+    name = piece_type if piece_type.endswith("_custom") else piece_type + "_custom"
+    board.pieces_defs[name] = json_copy(board.pieces_defs[piece_type])
+    return _state(board, state.get("turn", "white"), state.get("mode", "chess"))
+
+
+def json_copy(value):
+    import json
+    return json.loads(json.dumps(value))

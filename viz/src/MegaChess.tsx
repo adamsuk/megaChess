@@ -184,7 +184,7 @@ json.dumps(ns["legal"](game_state.to_py(), square.to_py(), "/chess"))
   const size = screen === "layout" ? layout?.board_size || 8 : state?.board.board_size || 8;
 
   return (
-    <div ref={rootRef} className={`mx-auto w-full rounded-lg bg-gray-50 p-4 dark:bg-gray-900 ${full ? "max-w-none min-h-screen" : "max-w-3xl"}`}>
+    <div ref={rootRef} className={`mx-auto w-full overflow-hidden rounded-lg bg-gray-50 p-4 dark:bg-gray-900 ${full ? "flex max-w-none min-h-screen flex-col" : "max-w-3xl"}`}>
       {screen === "menu" && (
         <div className="mx-auto max-w-sm space-y-3 py-8 text-center">
           <h2 className="text-2xl font-semibold">megaChess</h2>
@@ -262,7 +262,7 @@ json.dumps(ns["legal"](game_state.to_py(), square.to_py(), "/chess"))
 
 function BoardView({ size, matrix, moves = [], selected, onSquare }: { size: number; matrix: Cell[][]; moves?: number[][]; selected?: number[] | null; onSquare: (x: number, y: number) => void }) {
   return (
-    <div className="w-full max-w-full overflow-hidden">
+    <div className="mx-auto w-full max-w-full" style={{ width: "min(100%, calc(100dvh - 8rem))" }}>
       <div className="grid w-full gap-px" style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}>
         {Array.from({ length: size * size }, (_, index) => {
           const x = index % size;
@@ -273,8 +273,8 @@ function BoardView({ size, matrix, moves = [], selected, onSquare }: { size: num
           const isSelected = selected?.[0] === x && selected?.[1] === y;
           const light = (x + y) % 2 === 0;
           return (
-            <button key={`${x}-${y}`} type="button" onClick={() => onSquare(x, y)} className={`flex aspect-square w-full min-w-0 items-center justify-center p-0 text-[clamp(0.6rem,4vw,1.4rem)] ${cell === "hole" ? "bg-gray-700" : light ? "bg-amber-100" : "bg-amber-800"} ${isSelected ? "ring-2 ring-sky-500" : ""} ${isMove ? "ring-2 ring-emerald-400" : ""}`}>
-              <span className={piece?.color === "white" ? "text-white drop-shadow" : "text-gray-950"}>{piece ? GLYPH[piece.piece_type] || "?" : ""}</span>
+            <button key={`${x}-${y}`} type="button" onClick={() => onSquare(x, y)} className={`flex aspect-square w-full min-w-0 items-center justify-center p-0 [container-type:size] ${cell === "hole" ? "bg-gray-700" : light ? "bg-amber-100" : "bg-amber-800"} ${isSelected ? "ring-2 ring-sky-500" : ""} ${isMove ? "ring-2 ring-emerald-400" : ""}`}>
+              <span className={`leading-none ${piece?.color === "white" ? "text-white drop-shadow" : "text-gray-950"}`} style={{ fontSize: "62cqmin" }}>{piece ? GLYPH[piece.piece_type] || "?" : ""}</span>
             </button>
           );
         })}
